@@ -101,6 +101,28 @@ function getIpInfoTokenString()
  */
 function getIspInfo($ip, $ipService)
 {
+    if ($ipService === 'local') {
+        $dbPath = __DIR__ . '/qqwry.ipdb'; 
+        if (file_exists($dbPath)) {
+            require_once './IPDBReader.php'; // 假设你刚才存的文件名
+            try {
+                $reader = new \ipip\db\Reader($dbPath);
+                $addr = $reader->find($ip, 'CN'); // 获取中文信息
+                
+                return [
+                    'organization' => $addr[4] ?? 'Unknown', // 对应运营商
+                    'country' => $addr[0] ?? 'CN',
+                    'region' => ($addr[1] ?? '') . ($addr[2] ?? '') . ($addr[3] ?? ''), // 拼接省市区
+                    'city' => $addr[3] ?? '',
+                    'loc' => '0,0'
+                ];
+            } catch (Exception $e) {
+                return null;
+            }
+        }
+    }
+
+    // --- 原有的抓取逻辑（作为备选） ---
     $json = '';
     if ($ipService == 'ip.sb') {
         $json = file_get_contents('https://api.ip.sb/geoip/' . $ip);
@@ -302,12 +324,7 @@ function sendHeaders()
 }
 
 /**
- * @param string $ip
- * @param string|null $ipInfo
- * @param string|null $distance
- * @param array|null $rawIspInfo
- *
- * @return void
+ * 修改后的返回逻辑，去掉多余的 Unknown
  */
 function sendResponse(
     $ip,
@@ -315,15 +332,15 @@ function sendResponse(
     $rawIspInfo = null
 ) {
     $processedString = $ip;
-    if (is_string($ipInfo)) {
-        $processedString .= ' - '.$ipInfo;
+
+    // 如果运营商信息不是 Unknown，才进行拼接
+    if (is_string($ipInfo) && $ipInfo !== 'Unknown') {
+        $processedString .= ' - ' . $ipInfo;
     }
 
-    if (
-        is_array($rawIspInfo)
-        && array_key_exists('country', $rawIspInfo)
-    ) {
-        $processedString .= ' - '.$rawIspInfo['country'] . ',' . $rawIspInfo['region'] . ',' . $rawIspInfo['city'];
+    if (is_array($rawIspInfo) && array_key_exists('country', $rawIspInfo)) {
+        // 这里可以根据需要微调拼接的内容
+        $processedString .= ' - ' . $rawIspInfo['region']; 
     }
 
     sendHeaders();
