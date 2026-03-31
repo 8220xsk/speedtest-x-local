@@ -104,7 +104,7 @@ function getIspInfo($ip, $ipService)
     if ($ipService === 'local') {
         $dbPath = __DIR__ . '/qqwry.ipdb'; 
         if (file_exists($dbPath)) {
-            require_once './IPDBReader.php'; // 假设你刚才存的文件名
+            require_once './Reader.php'; // 假设你刚才存的文件名
             try {
                 $reader = new \ipip\db\Reader($dbPath);
                 $addr = $reader->find($ip, 'CN'); // 获取中文信息
