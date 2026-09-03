@@ -11,3 +11,8 @@ IPDB_使用指南.md
 chart.html
 test_ipdb.php
 test_modifications.php
+docker-compose-simple.yml
+docker-compose.yml
+Docker部署指南.md
+Dockerfile-prod
+setup_ipdb.sh
