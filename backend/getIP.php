@@ -102,19 +102,20 @@ function getIpInfoTokenString()
 function getIspInfo($ip, $ipService)
 {
     if ($ipService === 'local') {
-        $dbPath = __DIR__ . '/qqwry.ipdb'; 
+        $dbPath = __DIR__ . '/qqwry.ipdb';
         if (file_exists($dbPath)) {
             require_once './Reader.php'; // 假设你刚才存的文件名
             try {
                 $reader = new \ipip\db\Reader($dbPath);
                 $addr = $reader->find($ip, 'CN'); // 获取中文信息
-                
+
                 return [
-                    'organization' => $addr[4] ?? 'Unknown', // 对应运营商
-                    'country' => $addr[0] ?? 'CN',
-                    'region' => ($addr[1] ?? '') . ($addr[2] ?? '') . ($addr[3] ?? ''), // 拼接省市区
+                    'country' => $addr[0] ?? '中国',
+                    'region' => $addr[1] ?? '',
+                    'area' => $addr[2] ?? '',
                     'city' => $addr[3] ?? '',
-                    'loc' => '0,0'
+                    'organization' => $addr[4] ?? '未知',
+                    'isp' => $addr[4] ?? '未知'
                 ];
             } catch (Exception $e) {
                 return null;
@@ -168,6 +169,9 @@ function getIsp($rawIspInfo, $ipService)
             return 'Unknown';
         }
         return preg_replace('/AS\\d+\\s/', '', $rawIspInfo['org']);
+    } elseif ($ipService == 'local') {
+        // 使用本地数据库时直接返回运营商信息
+        return $rawIspInfo['isp'] ?? '未知';
     }
     return 'Unknown';
 }
@@ -324,7 +328,7 @@ function sendHeaders()
 }
 
 /**
- * 修改后的返回逻辑，去掉多余的 Unknown
+ * 修改后的返回逻辑，返回完整的地理位置信息
  */
 function sendResponse(
     $ip,
@@ -333,14 +337,17 @@ function sendResponse(
 ) {
     $processedString = $ip;
 
-    // 如果运营商信息不是 Unknown，才进行拼接
-    if (is_string($ipInfo) && $ipInfo !== 'Unknown') {
+    // 如果是本地IP，显示特殊信息
+    if (is_string($ipInfo) && ($ipInfo === 'localhost IPv4 access' ||
+        $ipInfo === 'localhost IPv6 access' ||
+        $ipInfo === 'private IPv4 access' ||
+        $ipInfo === 'link-local IPv4 access' ||
+        $ipInfo === 'link-local IPv6 access')) {
         $processedString .= ' - ' . $ipInfo;
     }
-
-    if (is_array($rawIspInfo) && array_key_exists('country', $rawIspInfo)) {
-        // 这里可以根据需要微调拼接的内容
-        $processedString .= ' - ' . $rawIspInfo['region']; 
+    // 如果运营商信息不是 Unknown，才进行拼接
+    elseif (is_string($ipInfo) && $ipInfo !== 'Unknown') {
+        $processedString .= ' - ' . $ipInfo;
     }
 
     sendHeaders();

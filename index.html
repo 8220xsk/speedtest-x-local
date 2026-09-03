@@ -22,16 +22,68 @@ s.onupdate=function(data){ //callback to update data in UI
     I("jitText").textContent=data.jitterStatus;
     var prog=(Number(data.dlProgress)*2+Number(data.ulProgress)*2+Number(data.pingProgress))/5;
 	I("progress").style.width=(100*prog)+"%";
-	var ipIspArr = I("ip").textContent.split(' - ', 3);
-	var ip = ipIspArr[0];
-	var isp = ipIspArr[1];
-	var addr = ipIspArr[2] === undefined? '' :ipIspArr[2];
+	var ipInfo = I("ip").textContent;
+	var ip = '';
+	var isp = '';
+	var country = '';
+	var region = '';
+	var city = '';
+	var area = '';
+
+	// 解析IP信息
+	if (ipInfo.includes(' - ')) {
+		var parts = ipInfo.split(' - ');
+		ip = parts[0];
+		if (parts.length > 1) {
+			// 判断是本地IP还是正常IP
+			if (parts[1] === 'localhost IPv4 access' ||
+				parts[1] === 'localhost IPv6 access' ||
+				parts[1] === 'private IPv4 access' ||
+				parts[1] === 'link-local IPv4 access' ||
+				parts[1] === 'link-local IPv6 access') {
+				// 本地IP，特殊处理
+				isp = parts[1];
+			} else {
+				// 正常IP，获取详细信息
+				isp = parts[1];
+				if (xhr.readyState === 4 && xhr.status === 200) {
+					try {
+						var response = JSON.parse(xhr.responseText);
+						if (response.rawIspInfo && typeof response.rawIspInfo === 'object') {
+							country = response.rawIspInfo.country || '';
+							region = response.rawIspInfo.region || '';
+							city = response.rawIspInfo.city || '';
+							area = response.rawIspInfo.area || '';
+						}
+					} catch (e) {
+						console.log('解析IP信息失败');
+					}
+				}
+			}
+		}
+	} else {
+		ip = ipInfo;
+	}
 	var progress = Math.floor(100*prog);
 	var key = key_prefix + "_" + ip;
+
+	// 更新IP信息显示
+	I("ipLine1").innerHTML = "IP地址: <span id=\"ip\">" + ip + "</span>";
+	var ipLine2 = document.getElementById("ipLine2");
+	if (ip && isp && !isp.includes('localhost') && !isp.includes('private')) {
+		ipLine2.innerHTML = "<strong>国家:</strong> " + country + " <strong>省份:</strong> " + region + " <strong>城市:</strong> " + city + " <strong>区域:</strong> " + area + " <strong>运营商:</strong> " + isp;
+	} else {
+		ipLine2.innerHTML = "<strong>运营商:</strong> " + isp;
+	}
+
 	if (progress > 20 && (progress % 10 == 0) && progress != milestone) {
 		console.log(progress);
-		var params = 'key='+key+'&ip='+ip+'&isp='+isp+'&addr='+addr+'&dspeed='+I("dlText").textContent+'&uspeed='+I("ulText").textContent+'&ping='+I("pingText").textContent
-						+'&jitter='+I("jitText").textContent;
+		var addr = '';
+	if (country || region || city || area) {
+		addr = country + ' ' + region + ' ' + city + ' ' + area;
+	}
+	var params = 'key='+key+'&ip='+ip+'&isp='+isp+'&addr='+addr+'&dspeed='+I("dlText").textContent+'&uspeed='+I("ulText").textContent+'&ping='+I("pingText").textContent
+					+'&jitter='+I("jitText").textContent;
 		xhr.timeout = 3000;
 		xhr.ontimeout = function (e) {
 			console.log('上报超时');
@@ -227,6 +279,21 @@ function I(id){return document.getElementById(id);}
         #pingText, #jitText {
             color: #FF8080;
         }
+        #ipArea {
+            font-size: 1.2em;
+            margin: 0.5em 0;
+            text-align: left;
+        }
+        #ipLine1 {
+            margin-bottom: 0.5em;
+        }
+        #ipLine2 {
+            font-size: 0.9em;
+            color: #404040;
+        }
+        #ipLine2 strong {
+            color: #6060AA;
+        }
     }
 
 </style>
@@ -261,7 +328,8 @@ function I(id){return document.getElementById(id);}
 		</div>
 	</div>
 	<div id="ipArea">
-		IP地址: <span id="ip"></span>
+		<div id="ipLine1">IP地址: <span id="ip"></span></div>
+		<div id="ipLine2"></div>
 	</div>
 </div>
 <p><a href="./results.html" target="_blank">查看测速记录</a></p>
