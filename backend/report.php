@@ -60,20 +60,10 @@ if (!empty($reportData['addr'])) {
 
 if (empty($reportData['ip'])) exit;
 
-if (SAME_IP_MULTI_LOGS) {
-    // 开启多记录时：直接 insert 新增，生成 2.json, 3.json...
-    $results = $store->insert($reportData);
-    if ($results['_id'] > MAX_LOG_COUNT) {
-        $store->where('_id', '=', $results['_id'] - MAX_LOG_COUNT)->delete();
-    }
-} else {
-    // 不开启多记录时：按 IP 覆盖旧记录
-    $oldLog = $store->where('ip', '=', $reportData['ip'])->orderBy('desc', '_id')->fetch();
-    if (is_array($oldLog) && empty($oldLog)) {
-        $results = $store->insert($reportData);
-    } else {
-        $id = $oldLog[0]['_id'];
-        unset($reportData['ip']);
-        $store->where('_id', '=', $id)->update($reportData);
-    }
+// 忽略任何配置判断，强制每次测速都新增记录
+$results = $store->insert($reportData);
+
+// 如果超过最大日志限制，删掉最旧的一条
+if (defined('MAX_LOG_COUNT') && $results['_id'] > MAX_LOG_COUNT) {
+    $store->where('_id', '=', $results['_id'] - MAX_LOG_COUNT)->delete();
 }
