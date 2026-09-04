@@ -104,18 +104,25 @@ function getIspInfo($ip, $ipService)
     if ($ipService === 'local') {
         $dbPath = __DIR__ . '/qqwry.ipdb';
         if (file_exists($dbPath)) {
-            require_once './Reader.php'; // 假设你刚才存的文件名
+            require_once './Reader.php';
             try {
                 $reader = new \ipip\db\Reader($dbPath);
                 $addr = $reader->find($ip, 'CN'); // 获取中文信息
 
+                // 拼接完整的地区 + 运营商字符串
+                $regionStr = implode(' ', array_filter([
+                    $addr[0] ?? '', // 国家
+                    $addr[1] ?? '', // 省份
+                    $addr[2] ?? '', // 城市
+                    $addr[3] ?? ''  // 运营商/组织 (注意这里是 3)
+                ]));
+
                 return [
-                    'country' => $addr[0] ?? '中国',
-                    'region' => $addr[1] ?? '',
-                    'area' => $addr[2] ?? '',
-                    'city' => $addr[3] ?? '',
-                    'organization' => $addr[4] ?? '未知',
-                    'isp' => $addr[4] ?? '未知'
+                    'country'      => $addr[0] ?? '中国',
+                    'region'       => $addr[1] ?? '',
+                    'city'         => $addr[2] ?? '',
+                    'organization' => $addr[3] ?? '未知',
+                    'isp'          => $regionStr ?: '未知' // 让 isp 字段包含完整信息
                 ];
             } catch (Exception $e) {
                 return null;
@@ -150,14 +157,15 @@ function getIspInfo($ip, $ipService)
 function getIsp($rawIspInfo, $ipService)
 {
     if ($ipService == 'ip.sb') {
-        if (
-            !is_array($rawIspInfo)
-            || !array_key_exists('organization', $rawIspInfo)
-            || !is_string($rawIspInfo['organization'])
-            || empty($rawIspInfo['organization'])
-        ) {
-            return 'Unknown';
-        }
+        ...
+    } elseif ($ipService == 'ipinfo.io') {
+        ...
+    } elseif ($ipService == 'local') {
+        // 直接返回我们上面组装好的包含省份和运营商的完整字符串
+        return is_array($rawIspInfo) ? ($rawIspInfo['isp'] ?? '未知') : 'Unknown';
+    }
+    return 'Unknown';
+}
         return $rawIspInfo['organization'];
     } elseif ($ipService == 'ipinfo.io') {
         if (
