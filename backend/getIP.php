@@ -7,18 +7,13 @@ $ip = getIp();
 
 // 判断是否为 IPv6 地址
 if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-    // IPv6 -> 走 API.IP.SB 在线解析
     $response = getIpsbInfo($ip);
 } else {
-    // IPv4 -> 走 本地 qqwry.ipdb 离线库
     $response = getLocalDbInfo($ip);
 }
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
-/**
- * 获取客户端真实 IP
- */
 function getIp()
 {
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
@@ -34,9 +29,6 @@ function getIp()
     return trim($ip);
 }
 
-/**
- * 请求 api.ip.sb 获取 IPv6 准确地理及运营商数据
- */
 function getIpsbInfo($ip)
 {
     $url = "https://api.ip.sb/geoip/" . urlencode($ip);
@@ -45,37 +37,39 @@ function getIpsbInfo($ip)
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 3);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 100.0; Win64; x64)');
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     $data = curl_exec($ch);
     curl_close($ch);
 
     $json = json_decode($data, true);
 
     if ($json && isset($json['ip'])) {
+        // 计算 UTC 偏移格式，如 offset: 32400 -> UTC+9
+        $offsetHours = isset($json['offset']) ? ($json['offset'] / 3600) : 0;
+        $utcStr = $offsetHours >= 0 ? "UTC+{$offsetHours}" : "UTC{$offsetHours}";
+
         return [
-            'ip'      => $ip,
-            'country' => $json['country'] ?? '',
-            'region'  => $json['region'] ?? '',
-            'city'    => $json['city'] ?? '',
-            'area'    => '',
-            'isp'     => $json['organization'] ?? ($json['isp'] ?? '')
+            'is_ipv6'          => true,
+            'ip'               => $ip,
+            'isp'              => $json['isp'] ?? '-',
+            'organization'     => $json['organization'] ?? '-',
+            'asn'              => isset($json['asn']) ? 'AS' . $json['asn'] : '-',
+            'asn_organization' => $json['asn_organization'] ?? '-',
+            'continent_code'   => $json['continent_code'] ?? '-',
+            'country'          => $json['country'] ?? '-',
+            'country_code'     => $json['country_code'] ?? '',
+            'region'           => $json['region'] ?? '-',
+            'region_code'      => $json['region_code'] ?? '',
+            'city'             => $json['city'] ?? '-',
+            'postal_code'      => $json['postal_code'] ?? '-',
+            'timezone'         => isset($json['timezone']) ? "{$json['timezone']} ({$utcStr})" : '-',
+            'lat_lon'          => (isset($json['latitude']) && isset($json['longitude'])) ? "{$json['latitude']}, {$json['longitude']}" : '-'
         ];
     }
 
-    // 保底处理
-    return [
-        'ip'      => $ip,
-        'country' => '中国',
-        'region'  => '',
-        'city'    => '',
-        'area'    => '',
-        'isp'     => ''
-    ];
+    return getFallbackResponse($ip, true);
 }
 
-/**
- * 读取本地 qqwry.ipdb 本地数据库（用于 IPv4）
- */
 function getLocalDbInfo($ip)
 {
     $dbPath = __DIR__ . '/qqwry.ipdb';
@@ -92,12 +86,23 @@ function getLocalDbInfo($ip)
     }
 
     return [
+        'is_ipv6'          => false,
+        'ip'               => $ip,
+        'country'          => !empty($rawIspInfo[0]) ? $rawIspInfo[0] : '中国',
+        'region'           => $rawIspInfo[1] ?? '',
+        'city'             => $rawIspInfo[2] ?? '',
+        'area'             => $rawIspInfo[3] ?? '',
+        'isp'              => $rawIspInfo[5] ?? ($rawIspInfo[4] ?? '未知')
+    ];
+}
+
+function getFallbackResponse($ip, $isIpv6 = false)
+{
+    return [
+        'is_ipv6' => $isIpv6,
         'ip'      => $ip,
-        'country' => !empty($rawIspInfo[0]) ? $rawIspInfo[0] : '中国',
-        'region'  => $rawIspInfo[1] ?? '',
-        'city'    => $rawIspInfo[2] ?? '',
-        'area'    => $rawIspInfo[3] ?? '',
-        'isp'     => $rawIspInfo[5] ?? ($rawIspInfo[4] ?? '')
+        'isp'     => '未知',
+        'country' => '中国'
     ];
 }
 
