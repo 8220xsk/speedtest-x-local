@@ -11,7 +11,6 @@
 var s = new Speedtest();
 var xhr = new XMLHttpRequest();
 var url_report = './backend/report.php';
-var milestone = 0;
 var key_prefix = Date.parse(new Date());
 
 // 全局 IP 及位置信息对象；source: ''=未取得 | 'ip.sb'=精细 | 'local'=本地基础 | 'unavailable'=ip.sb 无响应(不渲染)
@@ -27,6 +26,9 @@ var ipGeoData = {
 // ip.sb 是否已成功返回；是否已强制切到本地（用于拦截迟到的 ip.sb 响应）
 var ipSbOk = false;
 var forceLocal = false;
+// 本次测速唯一上报 key（每次点击测速重新生成）与已上报过的进度档
+var runKey = '';
+var lastReportedProgress = 0;
 
 function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
@@ -145,39 +147,47 @@ s.onupdate = function(data) {
     // 每次 update 刷新渲染文本
     renderIPInfo();
 
+    // 测速过程中按 10% 进度分档上报（携带本次测速固定 runKey）：
+    // 服务端第一次收到该 key 时新建一条记录，后续上报只在同一条记录里补填栏目
     var progress = Math.floor(100 * prog);
-    var key = key_prefix + "_" + (ipGeoData.ip || '127.0.0.1');
-
-    // ipGeoData.source 为空说明位置信息尚未取得（ip.sb 未决/未响应且本地未填充），本 tick 不上报，
-    // 避免写入空白行；数据就绪后下一个 %10 tick 会正常上报
-    if (progress > 20 && (progress % 10 == 0) && progress != milestone && ipGeoData.source) {
-        var addr = [ipGeoData.country, ipGeoData.region, ipGeoData.city, ipGeoData.area].filter(Boolean).join(' ');
-        var params = 'key=' + key +
-                     '&ip=' + encodeURIComponent(ipGeoData.ip) +
-                     '&isp=' + encodeURIComponent(ipGeoData.isp) +
-                     '&country=' + encodeURIComponent(ipGeoData.country) +
-                     '&region=' + encodeURIComponent(ipGeoData.region) +
-                     '&city=' + encodeURIComponent(ipGeoData.city) +
-                     '&area=' + encodeURIComponent(ipGeoData.area) +
-                     '&addr=' + encodeURIComponent(addr) +
-                     '&lat_lon=' + encodeURIComponent(ipGeoData.lat_lon) +
-                     '&dspeed=' + I("dlText").textContent +
-                     '&uspeed=' + I("ulText").textContent +
-                     '&ping=' + I("pingText").textContent +
-                     '&jitter=' + I("jitText").textContent;
-
-        xhr.timeout = 3000;
-        xhr.open('POST', url_report, true);
-        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-        xhr.send(params);
-        milestone = progress;
+    if (runKey && ipGeoData.source && progress > 20 && (progress % 10 == 0) && progress != lastReportedProgress) {
+        lastReportedProgress = progress;
+        submitLog();
     }
+}
+
+// 上报当前测速进度数据。同一 runKey 的多次上报会由后端合并进同一个 json 文件
+function submitLog() {
+    var key = runKey;
+    var addr = [ipGeoData.country, ipGeoData.region, ipGeoData.city, ipGeoData.area].filter(Boolean).join(' ');
+    var params = 'key=' + key +
+                 '&ip=' + encodeURIComponent(ipGeoData.ip) +
+                 '&isp=' + encodeURIComponent(ipGeoData.isp) +
+                 '&country=' + encodeURIComponent(ipGeoData.country) +
+                 '&region=' + encodeURIComponent(ipGeoData.region) +
+                 '&city=' + encodeURIComponent(ipGeoData.city) +
+                 '&area=' + encodeURIComponent(ipGeoData.area) +
+                 '&addr=' + encodeURIComponent(addr) +
+                 '&lat_lon=' + encodeURIComponent(ipGeoData.lat_lon) +
+                 '&dspeed=' + I("dlText").textContent +
+                 '&uspeed=' + I("ulText").textContent +
+                 '&ping=' + I("pingText").textContent +
+                 '&jitter=' + I("jitText").textContent;
+
+    xhr.timeout = 3000;
+    xhr.open('POST', url_report, true);
+    xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhr.send(params);
 }
 
 s.onend = function(aborted) {
     I("startStopBtn").className = "";
     if (aborted) {
-        initUI();
+        initUI();                       // 中途取消的测速不上报
+    } else if (runKey && ipGeoData.source && lastReportedProgress < 100) {
+        // 兜底：确保完整测速的最终数值也落到同一条记录上（正常情况下 100% 档已上报）
+        lastReportedProgress = 100;
+        submitLog();
     }
 }
 
@@ -185,6 +195,9 @@ function startStop() {
     if (s.getState() == 3) {
         s.abort();
     } else {
+        // 每次开始测速生成唯一 runKey → 后端据此新建一条记录，而不是复写上一次的
+        runKey = String(key_prefix) + '_' + new Date().getTime();
+        lastReportedProgress = 0;
         // ip.sb 尚未成功时（且当前不是内网已有的本地数据）：点击测速即回退本地基础版（仅触发一次）
         if (!ipSbOk && ipGeoData.source !== 'local' && !forceLocal) {
             forceLocal = true;

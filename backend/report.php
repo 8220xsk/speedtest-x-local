@@ -31,52 +31,66 @@ function maskLastSegment($ip) {
 }
 
 $rawIp = !empty($_POST['ip']) ? filter_var($_POST['ip'], FILTER_DEFAULT) : $_SERVER['REMOTE_ADDR'];
+$maskedIp = maskLastSegment($rawIp);
 
-$reportData = [
-    "key"     => sha1(!empty($_POST['key']) ? $_POST['key'] : microtime(true) . rand(1000, 9999)),
-    "ip"      => maskLastSegment($rawIp),
-    "isp"     => isset($_POST['isp']) ? $_POST['isp'] : '',
-    // 位置列：新版 index.html 按独立字段上报，直接落库（英文多词地名不再被空格拆分拆错）
-    "country" => isset($_POST['country']) ? $_POST['country'] : '',
-    "region"  => isset($_POST['region']) ? $_POST['region'] : '',
-    "city"    => isset($_POST['city']) ? $_POST['city'] : '',
-    "area"    => isset($_POST['area']) ? $_POST['area'] : '',
-    "addr"    => isset($_POST['addr']) ? $_POST['addr'] : '',
-    "lat_lon" => isset($_POST['lat_lon']) ? $_POST['lat_lon'] : '',
-    "dspeed"  => isset($_POST['dspeed']) ? (double)$_POST['dspeed'] : 0,
-    "uspeed"  => isset($_POST['uspeed']) ? (double)$_POST['uspeed'] : 0,
-    "ping"    => isset($_POST['ping']) ? (double)$_POST['ping'] : 0,
-    "jitter"  => isset($_POST['jitter']) ? (double)$_POST['jitter'] : 0,
-    "created" => date('Y-m-d H:i:s', time()),
-];
+// 位置列回退：新版前端按 country/region/city/area 独立字段上报；
+// 旧格式客户端未带独立字段、仅有 addr 时，用空格拆分回退（兼容老浏览器/旧缓存）
+$countryProvided = isset($_POST['country']) ? $_POST['country'] : '';
+if ($countryProvided === '' && !empty($_POST['addr'])) {
+    $parts = explode(' ', $_POST['addr']);
+    $_POST['country'] = $parts[0] ?? '';
+    $_POST['region']  = $parts[1] ?? '';
+    $_POST['city']    = $parts[2] ?? '';
+    $_POST['area']    = $parts[3] ?? '';
+}
 
-// 旧格式客户端未上报独立位置字段时，才退回原“addr 空格拆分”逻辑作兼容
-if (empty($reportData['country']) && !empty($reportData['addr'])) {
-    $parts = explode(' ', $reportData['addr']);
-    if (count($parts) >= 4) {
-        $reportData['country'] = $parts[0];
-        $reportData['region']  = $parts[1];
-        $reportData['city']    = $parts[2];
-        $reportData['area']    = $parts[3];
-    } else if (count($parts) >= 3) {
-        $reportData['country'] = $parts[0];
-        $reportData['region']  = $parts[1];
-        $reportData['city']    = $parts[2];
-    } else if (count($parts) >= 2) {
-        $reportData['country'] = $parts[0];
-        $reportData['region']  = $parts[1];
+// 只收集本次上报中“非空”的可更新字段：非空才补写，避免把同一条记录里的旧栏目清空
+$patch = [];
+if ($maskedIp !== '' && $maskedIp !== 'Unknown') {
+    $patch['ip'] = $maskedIp;
+}
+foreach (['isp', 'country', 'region', 'city', 'area', 'addr', 'lat_lon'] as $f) {
+    if (isset($_POST[$f]) && $_POST[$f] !== '') {
+        $patch[$f] = $_POST[$f];
+    }
+}
+foreach (['dspeed', 'uspeed', 'ping', 'jitter'] as $f) {
+    if (isset($_POST[$f]) && $_POST[$f] !== '' && is_numeric($_POST[$f])) {
+        $patch[$f] = (double) $_POST[$f];
     }
 }
 
-try {
-    // 收到请求时（代表测试完全结束），直接新建一条测速日志
-    $store = \SleekDB\SleekDB::store('speedlogs', __DIR__ . '/', ['auto_cache' => false, 'timeout' => 120]);
-    $results = $store->insert($reportData);
+// 每次测速由前端携带唯一 key：第一次上报时新建该 key 的记录（新的 json），
+// 之后的每次上报只 update 同一条记录，测速各栏目随进度逐渐补全。
+// 旧格式（无 key）客户端退化为每次新建一条，保持向后兼容。
+$keyInput = isset($_POST['key']) ? trim((string) $_POST['key']) : '';
+$reportKey = sha1($keyInput !== '' ? $keyInput : uniqid('', true));
 
-    // 限制保存最大条数，超出部分删除最旧的一条
-    $maxCount = defined('MAX_LOG_COUNT') ? (int)MAX_LOG_COUNT : 100;
-    if ($results['_id'] > $maxCount) {
-        $store->where('_id', '=', $results['_id'] - $maxCount)->delete();
+try {
+    $store = \SleekDB\SleekDB::store('speedlogs', __DIR__ . '/', ['auto_cache' => false, 'timeout' => 120]);
+
+    $existing = $store->where('key', '=', $reportKey)->fetch();
+    if (is_array($existing) && !empty($existing)) {
+        // 已存在该次测速记录：只补填本次上报的非空字段
+        if (!empty($patch)) {
+            $store->where('key', '=', $reportKey)->update($patch);
+        }
+    } else {
+        // 首次收到该 key：新建一条记录，随后续上报逐渐补全
+        $newLog = $patch;
+        $newLog['key']     = $reportKey;
+        $newLog['created'] = date('Y-m-d H:i:s', time());
+        $store->insert($newLog);
+    }
+
+    // 只保留最新的 MAX_LOG_COUNT 条记录，超出部分删除最旧的
+    $maxCount = defined('MAX_LOG_COUNT') ? (int) MAX_LOG_COUNT : 100;
+    $all = $store->orderBy('asc', '_id')->fetch();
+    if (is_array($all) && count($all) > $maxCount) {
+        $excessCount = count($all) - $maxCount;
+        foreach (array_slice($all, 0, $excessCount) as $old) {
+            $store->where('_id', '=', $old['_id'])->delete();
+        }
     }
 
     echo "1";
