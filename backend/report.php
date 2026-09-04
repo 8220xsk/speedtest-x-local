@@ -26,6 +26,7 @@ $reportData = [
     "ip"      => maskLastSegment($rawIp),
     "isp"     => isset($_POST['isp']) ? $_POST['isp'] : '',
     "addr"    => isset($_POST['addr']) ? $_POST['addr'] : '',
+    "lat_lon" => isset($_POST['lat_lon']) ? $_POST['lat_lon'] : '',
     "dspeed"  => isset($_POST['dspeed']) ? (double)$_POST['dspeed'] : 0,
     "uspeed"  => isset($_POST['uspeed']) ? (double)$_POST['uspeed'] : 0,
     "ping"    => isset($_POST['ping']) ? (double)$_POST['ping'] : 0,

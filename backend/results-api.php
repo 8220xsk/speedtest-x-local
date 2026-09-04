@@ -25,8 +25,18 @@ foreach ($logs as &$log) {
     $log['country'] = $log['country'] ?? '';
     $log['region']  = $log['region'] ?? '';
     $log['city']    = $log['city'] ?? '';
-    $log['area']    = $log['area'] ?? '';
-    $log['isp']     = $log['isp'] ?? '';
+
+    // 处理 IPv6 打码 - 只保留前三段
+    if (!empty($log['ip']) && filter_var($log['ip'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $segments = explode(':', $log['ip']);
+        if (count($segments) >= 3) {
+            $log['ip'] = $segments[0] . ':' . $segments[1] . ':' . $segments[2] . ':*';
+        }
+    }
+
+    // 区域显示经纬度数据
+    $log['area'] = !empty($log['lat_lon']) ? $log['lat_lon'] : ($log['area'] ?? '');
+    $log['isp']  = $log['isp'] ?? '';
 }
 
 $data = [

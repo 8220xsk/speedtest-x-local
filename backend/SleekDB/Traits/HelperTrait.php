@@ -156,7 +156,6 @@
       if ( file_exists( $counterPath ) ) {
         $fp = fopen($counterPath, 'r+');
         for($retries = 10; $retries > 0; $retries--) {
-          flock($fp, LOCK_UN);
           if (flock($fp, LOCK_EX) === false) {
             sleep(1);
           } else {
