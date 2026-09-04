@@ -484,7 +484,7 @@
         please provide a valid PHP associative array' );
       // Define the store path
       $storePath = $this->storePath . 'data/' . $id . '.json';
-      if ( ! file_put_contents( $storePath, $storableJSON ) ) {
+      if ( ! file_put_contents( $storePath, $storableJSON, LOCK_EX ) ) {
         throw new IOException( "Unable to write the object file! Please check if PHP has write permission." );
       }
       return $storeData;

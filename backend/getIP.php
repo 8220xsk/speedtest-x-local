@@ -63,7 +63,7 @@ function getIpsbInfo($ip)
             'city'             => $json['city'] ?? '-',
             'postal_code'      => $json['postal_code'] ?? '-',
             'timezone'         => isset($json['timezone']) ? "{$json['timezone']} ({$utcStr})" : '-',
-            'lat_lon'          => (isset($json['latitude']) && isset($json['longitude'])) ? "{$json['latitude']}, {$json['longitude']}" : '-'
+            'lat_lon'          => (isset($json['latitude']) && isset($json['longitude'])) ? "{$json['longitude']}, {$json['latitude']}" : '-'
         ];
     }
 
