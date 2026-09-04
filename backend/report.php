@@ -36,6 +36,11 @@ $reportData = [
     "key"     => sha1(!empty($_POST['key']) ? $_POST['key'] : microtime(true) . rand(1000, 9999)),
     "ip"      => maskLastSegment($rawIp),
     "isp"     => isset($_POST['isp']) ? $_POST['isp'] : '',
+    // 位置列：新版 index.html 按独立字段上报，直接落库（英文多词地名不再被空格拆分拆错）
+    "country" => isset($_POST['country']) ? $_POST['country'] : '',
+    "region"  => isset($_POST['region']) ? $_POST['region'] : '',
+    "city"    => isset($_POST['city']) ? $_POST['city'] : '',
+    "area"    => isset($_POST['area']) ? $_POST['area'] : '',
     "addr"    => isset($_POST['addr']) ? $_POST['addr'] : '',
     "lat_lon" => isset($_POST['lat_lon']) ? $_POST['lat_lon'] : '',
     "dspeed"  => isset($_POST['dspeed']) ? (double)$_POST['dspeed'] : 0,
@@ -45,7 +50,8 @@ $reportData = [
     "created" => date('Y-m-d H:i:s', time()),
 ];
 
-if (!empty($reportData['addr'])) {
+// 旧格式客户端未上报独立位置字段时，才退回原“addr 空格拆分”逻辑作兼容
+if (empty($reportData['country']) && !empty($reportData['addr'])) {
     $parts = explode(' ', $reportData['addr']);
     if (count($parts) >= 4) {
         $reportData['country'] = $parts[0];

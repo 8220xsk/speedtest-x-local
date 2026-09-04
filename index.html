@@ -14,8 +14,9 @@ var url_report = './backend/report.php';
 var milestone = 0;
 var key_prefix = Date.parse(new Date());
 
-// 全局 IP 及位置信息对象
+// 全局 IP 及位置信息对象；source: ''=未取得 | 'ip.sb'=精细 | 'local'=本地基础 | 'unavailable'=ip.sb 无响应(不渲染)
 var ipGeoData = {
+    source: '',
     ip: '',
     country: '',
     region: '',
@@ -23,6 +24,15 @@ var ipGeoData = {
     area: '',
     isp: ''
 };
+// ip.sb 是否已成功返回；是否已强制切到本地（用于拦截迟到的 ip.sb 响应）
+var ipSbOk = false;
+var forceLocal = false;
+
+function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
 
 function renderIPInfo() {
     var container = document.getElementById('ip');
@@ -30,30 +40,33 @@ function renderIPInfo() {
         container = document.querySelector('.ip-info') || document.body;
     }
 
-    // 优先渲染 IPv6 / IP.SB 的多字段精细排版
-    if (ipGeoData.is_ipv6) {
+    // 无可用数据（ip.sb 未成功、尚未获取）时保持空白，不显示占位
+    if (!ipGeoData.source || ipGeoData.source === 'unavailable') return;
+
+    // 除局域网(本地基础版)外，IP.SB 成功即优先渲染多字段精细排版
+    if (ipGeoData.source === 'ip.sb') {
         var countryStr = ipGeoData.country_code ? (ipGeoData.country + ' (' + ipGeoData.country_code + ')') : (ipGeoData.country || '-');
         var regionStr  = ipGeoData.region_code ? (ipGeoData.region + ' (' + ipGeoData.region_code + ')') : (ipGeoData.region || '-');
 
         container.innerHTML =
             '<div style="text-align: center; line-height: 1.8; font-size: 14px; margin-top: 10px;">' +
-                '<div><strong>IP地址</strong>: ' + (ipGeoData.ip || '-') + '</div>' +
-                '<div><strong>运营商</strong>: ' + (ipGeoData.isp || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>组织</strong>: ' + (ipGeoData.organization || '-') + '</div>' +
-                '<div><strong>自治系统 (ASN)</strong>: ' + (ipGeoData.asn || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>大洲代码</strong>: ' + (ipGeoData.continent_code || '-') + '</div>' +
-                '<div><strong>ASN组织</strong>: ' + (ipGeoData.asn_organization || '-') + '</div>' +
-                '<div><strong>国家</strong>: ' + countryStr + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + regionStr + '</div>' +
-                '<div><strong>城市</strong>: ' + (ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>邮编</strong>: ' + (ipGeoData.postal_code || '-') + '</div>' +
-                '<div><strong>时区</strong>: ' + (ipGeoData.timezone || '-') + '</div>' +
-                '<div><strong>经纬度</strong>: ' + (ipGeoData.lat_lon || '-') + '</div>' +
+                '<div><strong>IP地址</strong>: ' + esc(ipGeoData.ip || '-') + '</div>' +
+                '<div><strong>运营商</strong>: ' + esc(ipGeoData.isp || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>组织</strong>: ' + esc(ipGeoData.organization || '-') + '</div>' +
+                '<div><strong>自治系统 (ASN)</strong>: ' + esc(ipGeoData.asn || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>大洲代码</strong>: ' + esc(ipGeoData.continent_code || '-') + '</div>' +
+                '<div><strong>ASN组织</strong>: ' + esc(ipGeoData.asn_organization || '-') + '</div>' +
+                '<div><strong>国家</strong>: ' + esc(countryStr) + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + esc(regionStr) + '</div>' +
+                '<div><strong>城市</strong>: ' + esc(ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>邮编</strong>: ' + esc(ipGeoData.postal_code || '-') + '</div>' +
+                '<div><strong>时区</strong>: ' + esc(ipGeoData.timezone || '-') + '</div>' +
+                '<div><strong>经纬度</strong>: ' + esc(ipGeoData.lat_lon || '-') + '</div>' +
             '</div>';
     } else {
-        // IPv4 本地离线库基础排版
-        container.innerHTML = 
+        // 局域网 / 本地离线库基础排版
+        container.innerHTML =
             '<div style="text-align: center; line-height: 1.8; font-size: 14px; margin-top: 10px;">' +
-                '<div><strong>IP地址</strong>: ' + (ipGeoData.ip || '-') + '</div>' +
-                '<div><strong>国家</strong>: ' + (ipGeoData.country || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + (ipGeoData.region || '-') + '</div>' +
-                '<div><strong>城市</strong>: ' + (ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>区县</strong>: ' + (ipGeoData.area || '-') + '</div>' +
-                '<div><strong>运营商</strong>: ' + (ipGeoData.isp || '-') + '</div>' +
+                '<div><strong>IP地址</strong>: ' + esc(ipGeoData.ip || '-') + '</div>' +
+                '<div><strong>国家</strong>: ' + esc(ipGeoData.country || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + esc(ipGeoData.region || '-') + '</div>' +
+                '<div><strong>城市</strong>: ' + esc(ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>区县</strong>: ' + esc(ipGeoData.area || '-') + '</div>' +
+                '<div><strong>运营商</strong>: ' + esc(ipGeoData.isp || '-') + '</div>' +
             '</div>';
     }
 }
@@ -61,40 +74,59 @@ function renderIPInfo() {
 // 兼容别名
 var renderIpInfo = renderIPInfo;
 
-function fetchIPInfo() {
+function fetchIPInfo(source) {
     var getIpXhr = new XMLHttpRequest();
-    getIpXhr.open('GET', './backend/getIP.php', true);
+    var url = './backend/getIP.php' + (source ? '?source=' + encodeURIComponent(source) : '');
+    getIpXhr.open('GET', url, true);
+    getIpXhr.timeout = 8000;
+
+    // 强制本地请求失败时解除锁，允许下一次点击测速重试
+    function unlockOnFail() {
+        if (source === 'local') forceLocal = false;
+    }
+
     getIpXhr.onload = function() {
-        if (getIpXhr.status === 200) {
-            try {
-                var res = JSON.parse(getIpXhr.responseText);
-                if (res) {
-                    // 将后端返回的所有新字段全部存入 ipGeoData 全局变量
-                    ipGeoData.is_ipv6          = res.is_ipv6 || false;
-                    ipGeoData.ip               = res.ip || '';
-                    ipGeoData.isp              = res.isp || '';
-                    ipGeoData.organization     = res.organization || '';
-                    ipGeoData.asn              = res.asn || '';
-                    ipGeoData.asn_organization = res.asn_organization || '';
-                    ipGeoData.continent_code   = res.continent_code || '';
-                    ipGeoData.country          = res.country || '';
-                    ipGeoData.country_code     = res.country_code || '';
-                    ipGeoData.region           = res.region || '';
-                    ipGeoData.region_code      = res.region_code || '';
-                    ipGeoData.city             = res.city || '';
-                    ipGeoData.area             = res.area || '';
-                    ipGeoData.postal_code      = res.postal_code || '';
-                    ipGeoData.timezone         = res.timezone || '';
-                    ipGeoData.lat_lon          = res.lat_lon || '';
-                    
-                    // 拿到数据后立即无参渲染更新页面
-                    renderIPInfo();
-                }
-            } catch (e) {
-                console.error("IP解析失败", e);
-            }
+        if (getIpXhr.status !== 200) { unlockOnFail(); return; }
+
+        var res;
+        try { res = JSON.parse(getIpXhr.responseText); } catch (e) { unlockOnFail(); return; }
+        if (!res || !res.source) { unlockOnFail(); return; }
+
+        // ip.sb 未响应：不写入任何字段、不渲染（保持空白），等点击测速再回退本地
+        if (res.source === 'unavailable') return;
+        // 已强制切本地后，丢弃迟到的 auto 响应（ip.sb 成功或超时结果都忽略）
+        if (forceLocal && res.source !== 'local') return;
+
+        // —— 到这里才允许写入全局数据 ——
+        ipGeoData.source           = res.source;
+        ipGeoData.is_ipv6          = res.is_ipv6 || false;
+        ipGeoData.ip               = res.ip || '';
+        ipGeoData.isp              = res.isp || '';
+        ipGeoData.organization     = res.organization || '';
+        ipGeoData.asn              = res.asn || '';
+        ipGeoData.asn_organization = res.asn_organization || '';
+        ipGeoData.continent_code   = res.continent_code || '';
+        ipGeoData.country          = res.country || '';
+        ipGeoData.country_code     = res.country_code || '';
+        ipGeoData.region           = res.region || '';
+        ipGeoData.region_code      = res.region_code || '';
+        ipGeoData.city             = res.city || '';
+        ipGeoData.area             = res.area || '';
+        ipGeoData.postal_code      = res.postal_code || '';
+        ipGeoData.timezone         = res.timezone || '';
+        ipGeoData.lat_lon          = res.lat_lon || '';
+
+        if (res.source === 'ip.sb') {
+            ipSbOk = true;
+            forceLocal = false;
+        } else if (res.source === 'local') {
+            ipSbOk = false;
         }
+
+        renderIPInfo();
     };
+    getIpXhr.onerror = getIpXhr.ontimeout = unlockOnFail;
+
     getIpXhr.send();
 }
 
@@ -116,11 +148,17 @@ s.onupdate = function(data) {
     var progress = Math.floor(100 * prog);
     var key = key_prefix + "_" + (ipGeoData.ip || '127.0.0.1');
 
-    if (progress > 20 && (progress % 10 == 0) && progress != milestone) {
+    // ipGeoData.source 为空说明位置信息尚未取得（ip.sb 未决/未响应且本地未填充），本 tick 不上报，
+    // 避免写入空白行；数据就绪后下一个 %10 tick 会正常上报
+    if (progress > 20 && (progress % 10 == 0) && progress != milestone && ipGeoData.source) {
         var addr = [ipGeoData.country, ipGeoData.region, ipGeoData.city, ipGeoData.area].filter(Boolean).join(' ');
         var params = 'key=' + key +
                      '&ip=' + encodeURIComponent(ipGeoData.ip) +
                      '&isp=' + encodeURIComponent(ipGeoData.isp) +
+                     '&country=' + encodeURIComponent(ipGeoData.country) +
+                     '&region=' + encodeURIComponent(ipGeoData.region) +
+                     '&city=' + encodeURIComponent(ipGeoData.city) +
+                     '&area=' + encodeURIComponent(ipGeoData.area) +
                      '&addr=' + encodeURIComponent(addr) +
                      '&lat_lon=' + encodeURIComponent(ipGeoData.lat_lon) +
                      '&dspeed=' + I("dlText").textContent +
@@ -147,6 +185,11 @@ function startStop() {
     if (s.getState() == 3) {
         s.abort();
     } else {
+        // ip.sb 尚未成功时（且当前不是内网已有的本地数据）：点击测速即回退本地基础版（仅触发一次）
+        if (!ipSbOk && ipGeoData.source !== 'local' && !forceLocal) {
+            forceLocal = true;
+            fetchIPInfo('local'); // 异步，不阻塞测速开始
+        }
         s.start();
         I("startStopBtn").className = "running";
     }
