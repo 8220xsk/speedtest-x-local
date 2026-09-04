@@ -8,23 +8,23 @@ $rawIspInfo = getIspInfo($ip);
 
 $response = [
     'ip'      => $ip,
-    'country' => $rawIspInfo['country'] ?? '中国',
-    'region'  => $rawIspInfo['region'] ?? '',
-    'city'    => $rawIspInfo['city'] ?? '',
-    'area'    => $rawIspInfo['area'] ?? '',
-    'isp'     => $rawIspInfo['isp'] ?? '未知'
+    'country' => $rawIspInfo[0] ?? '中国',
+    'region'  => $rawIspInfo[1] ?? '',
+    'city'    => $rawIspInfo[2] ?? '',
+    'area'    => $rawIspInfo[3] ?? '',
+    'isp'     => $rawIspInfo[4] ?? ($rawIspInfo[5] ?? '未知')
 ];
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
 function getIp()
 {
-    if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-    } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
+    } elseif (!empty($_SERVER['HTTP_CLIENT_IP'])) {
         $ip = $_SERVER['HTTP_CLIENT_IP'];
     } else {
-        $ip = $_SERVER['REMOTE_ADDR'];
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
     }
     if (strpos($ip, ',') !== false) {
         $ip = explode(',', $ip)[0];
@@ -34,23 +34,18 @@ function getIp()
 
 function getIspInfo($ip)
 {
+    // 适配容器内 /backend/qqwry.ipdb 的实际存放路径
     $dbPath = __DIR__ . '/qqwry.ipdb';
-    if (file_exists($dbPath)) {
-        require_once './Reader.php';
+    
+    if (file_exists($dbPath) && file_exists(__DIR__ . '/Reader.php')) {
+        require_once __DIR__ . '/Reader.php';
         try {
             $reader = new \ipip\db\Reader($dbPath);
-            $addr = $reader->find($ip);
-
-            if (is_array($addr)) {
-                return [
-                    'country' => $addr[0] ?? '中国',
-                    'region'  => $addr[1] ?? '',
-                    'city'    => $addr[2] ?? '',
-                    'area'    => $addr[3] ?? '',
-                    'isp'     => !empty($addr[5]) ? $addr[5] : ($addr[4] ?? '未知')
-                ];
-            }
-        } catch (Exception $e) {
+            // Reader.php 的 find 方法必须传入语言参数 'CN'
+            $addr = $reader->find($ip, 'CN');
+            return $addr;
+        } catch (\Throwable $e) {
+            // 捕获所有异常，防止 PHP 直接抛出致命错误导致空白响应
             return null;
         }
     }
