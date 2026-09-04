@@ -109,20 +109,13 @@ function getIspInfo($ip, $ipService)
                 $reader = new \ipip\db\Reader($dbPath);
                 $addr = $reader->find($ip, 'CN'); // 获取中文信息
 
-                // 拼接完整的地区 + 运营商字符串
-                $regionStr = implode(' ', array_filter([
-                    $addr[0] ?? '', // 国家
-                    $addr[1] ?? '', // 省份
-                    $addr[2] ?? '', // 城市
-                    $addr[3] ?? ''  // 运营商/组织 (注意这里是 3)
-                ]));
-
                 return [
                     'country'      => $addr[0] ?? '中国',
                     'region'       => $addr[1] ?? '',
                     'city'         => $addr[2] ?? '',
+                    'area'         => '',
                     'organization' => $addr[3] ?? '未知',
-                    'isp'          => $regionStr ?: '未知' // 让 isp 字段包含完整信息
+                    'isp'          => $addr[3] ?? ($addr[2] ?? '未知') // 仅传真正的运营商/组织名
                 ];
             } catch (Exception $e) {
                 return null;
