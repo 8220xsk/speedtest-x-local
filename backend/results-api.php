@@ -26,16 +26,6 @@ foreach ($logs as &$log) {
     $log['region']  = $log['region'] ?? '';
     $log['city']    = $log['city'] ?? '';
 
-    // 处理 IPv6 打码 - 只保留前三段
-    if (!empty($log['ip']) && filter_var($log['ip'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-        $segments = explode(':', $log['ip']);
-        if (count($segments) >= 4) {
-            // 保留前三段，后面全部替换为 *
-            $maskedSegments = array_slice($segments, 0, 3);
-            $log['ip'] = implode(':', $maskedSegments) . ':*';
-        }
-    }
-
     // 区域显示经纬度数据
     $log['area'] = !empty($log['lat_lon']) ? $log['lat_lon'] : ($log['area'] ?? '');
     $log['isp']  = $log['isp'] ?? '';

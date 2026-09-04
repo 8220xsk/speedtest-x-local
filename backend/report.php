@@ -9,18 +9,25 @@ ini_set('display_errors', 0);
 
 function maskLastSegment($ip) {
     if (empty($ip)) return "Unknown";
-    $ipaddr = @inet_pton($ip);
-    if ($ipaddr === false) return "Unknown";
 
-    if (strlen($ipaddr) == 4) {
-        $ipaddr[3] = chr(0);
-    } elseif (strlen($ipaddr) == 16) {
-        $ipaddr[14] = chr(0);
-        $ipaddr[15] = chr(0);
-    } else {
-        return "Unknown";
+    // IPv4 处理
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $parts = explode('.', $ip);
+        if (count($parts) == 4) {
+            return $parts[0] . '.' . $parts[1] . '.' . $parts[2] . '.*';
+        }
     }
-    return rtrim(inet_ntop($ipaddr), "0") . "*";
+
+    // IPv6 处理 - 只保留前三段
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $segments = explode(':', $ip);
+        if (count($segments) >= 3) {
+            $maskedSegments = array_slice($segments, 0, 3);
+            return implode(':', $maskedSegments) . ':*';
+        }
+    }
+
+    return "Unknown";
 }
 
 $rawIp = !empty($_POST['ip']) ? filter_var($_POST['ip'], FILTER_DEFAULT) : $_SERVER['REMOTE_ADDR'];

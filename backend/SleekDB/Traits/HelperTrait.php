@@ -153,22 +153,28 @@
     private function getStoreId() {
       $counter = 1; // default (first) id
       $counterPath = $this->storePath . '_cnt.sdb';
-      if ( file_exists( $counterPath ) ) {
-        $fp = fopen($counterPath, 'r+');
-        for($retries = 10; $retries > 0; $retries--) {
-          if (flock($fp, LOCK_EX) === false) {
-            sleep(1);
-          } else {
-            $counter = (int) fgets($fp);
-            $counter++;
-            rewind($fp);
-            fwrite($fp, (string) $counter);
-            break;
+
+      $fp = fopen($counterPath, 'c+'); // 使用 'c+' 模式，文件不存在时创建但不截断
+      for($retries = 10; $retries > 0; $retries--) {
+        if (flock($fp, LOCK_EX) === false) {
+          sleep(1);
+        } else {
+          // 文件为空时初始化为 0
+          $current = (int) stream_get_contents($fp);
+          if ($current === 0) {
+            $current = 0;
           }
+
+          $counter = $current + 1;
+          rewind($fp);
+          ftruncate($fp, 0);
+          fwrite($fp, (string) $counter);
+          fflush($fp);
+          break;
         }
-        flock($fp, LOCK_UN);
-        fclose($fp);
       }
+      flock($fp, LOCK_UN);
+      fclose($fp);
       return $counter;
     }
 
