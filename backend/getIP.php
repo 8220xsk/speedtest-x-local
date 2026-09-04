@@ -4,20 +4,21 @@ error_reporting(0);
 Header("Content-Type: application/json; charset=utf-8");
 
 $ip = getIp();
-$rawIspInfo = getIspInfo($ip);
 
-// 精准对接标准版 qqwry.ipdb 的数组索引
-$response = [
-    'ip'      => $ip,
-    'country' => !empty($rawIspInfo[0]) ? $rawIspInfo[0] : '中国',
-    'region'  => $rawIspInfo[1] ?? '',
-    'city'    => $rawIspInfo[2] ?? '',
-    'area'    => $rawIspInfo[3] ?? '',  // district_name 区县
-    'isp'     => $rawIspInfo[5] ?? ($rawIspInfo[4] ?? '未知') // isp_domain 位于索引 5
-];
+// 判断是否为 IPv6 地址
+if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+    // IPv6 -> 走 API.IP.SB 在线解析
+    $response = getIpsbInfo($ip);
+} else {
+    // IPv4 -> 走 本地 qqwry.ipdb 离线库
+    $response = getLocalDbInfo($ip);
+}
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
+/**
+ * 获取客户端真实 IP
+ */
 function getIp()
 {
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
@@ -33,21 +34,71 @@ function getIp()
     return trim($ip);
 }
 
-function getIspInfo($ip)
+/**
+ * 请求 api.ip.sb 获取 IPv6 准确地理及运营商数据
+ */
+function getIpsbInfo($ip)
+{
+    $url = "https://api.ip.sb/geoip/" . urlencode($ip);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 100.0; Win64; x64)');
+    $data = curl_exec($ch);
+    curl_close($ch);
+
+    $json = json_decode($data, true);
+
+    if ($json && isset($json['ip'])) {
+        return [
+            'ip'      => $ip,
+            'country' => $json['country'] ?? '',
+            'region'  => $json['region'] ?? '',
+            'city'    => $json['city'] ?? '',
+            'area'    => '',
+            'isp'     => $json['organization'] ?? ($json['isp'] ?? '')
+        ];
+    }
+
+    // 保底处理
+    return [
+        'ip'      => $ip,
+        'country' => '中国',
+        'region'  => '',
+        'city'    => '',
+        'area'    => '',
+        'isp'     => ''
+    ];
+}
+
+/**
+ * 读取本地 qqwry.ipdb 本地数据库（用于 IPv4）
+ */
+function getLocalDbInfo($ip)
 {
     $dbPath = __DIR__ . '/qqwry.ipdb';
-    
+    $rawIspInfo = null;
+
     if (file_exists($dbPath) && file_exists(__DIR__ . '/Reader.php')) {
         require_once __DIR__ . '/Reader.php';
         try {
             $reader = new \ipip\db\Reader($dbPath);
-            // 必须传入语言参数 'CN' 以匹配索引列
-            return $reader->find($ip, 'CN');
+            $rawIspInfo = $reader->find($ip, 'CN');
         } catch (\Throwable $e) {
-            return null;
+            $rawIspInfo = null;
         }
     }
-    return null;
+
+    return [
+        'ip'      => $ip,
+        'country' => !empty($rawIspInfo[0]) ? $rawIspInfo[0] : '中国',
+        'region'  => $rawIspInfo[1] ?? '',
+        'city'    => $rawIspInfo[2] ?? '',
+        'area'    => $rawIspInfo[3] ?? '',
+        'isp'     => $rawIspInfo[5] ?? ($rawIspInfo[4] ?? '')
+    ];
 }
 
 function sendResponse($ip, $rawIspInfo = null)

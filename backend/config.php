@@ -11,6 +11,6 @@ const MAX_LOG_COUNT = 100;
 const IP_SERVICE = 'local';
 
 /**
- * 是否允许同一IP记录多条测速结果
+ * 是否允许同一IP记录多条测速结果（设为 true 才会生成 2.json, 3.json...）
  */
-const SAME_IP_MULTI_LOGS = false;
+const SAME_IP_MULTI_LOGS = true;
