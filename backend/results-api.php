@@ -16,7 +16,7 @@ $logs = $store
     ->limit(MAX_LOG_COUNT)
     ->fetch();
 
-// 确保在无数据时 $logs 为空数组，防止 SleekDB 返回 false/null 导致报错
+// 关键修正：确保 SleekDB 在无数据时不返回 null，避免 JSON 结构破损引起 parsererror
 if (!is_array($logs)) {
     $logs = [];
 }
@@ -29,7 +29,6 @@ foreach ($logs as &$log) {
     $log['isp']     = $log['isp'] ?? '';
 }
 
-// Layui 严格要求的表格数据格式
 $data = [
     'code'  => 0,
     'msg'   => '',
