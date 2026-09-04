@@ -24,42 +24,36 @@ var ipGeoData = {
     isp: ''
 };
 
-function renderIPInfo(data) {
+function renderIPInfo() {
     var container = document.getElementById('ip');
     if (!container) {
         container = document.querySelector('.ip-info') || document.body;
     }
 
-    // 防护校验：如果 data 不存在或不是对象，防止程序崩溃
-    if (!data || typeof data !== 'object') {
-        container.innerHTML = '<div style="text-align: center;">IP 信息获取失败</div>';
-        return;
-    }
-
-    // 判断是否为 IPv6 数据结构
-    if (data.is_ipv6) {
-        var countryStr = data.country_code ? (data.country + ' (' + data.country_code + ')') : (data.country || '-');
-        var regionStr  = data.region_code ? (data.region + ' (' + data.region_code + ')') : (data.region || '-');
+    // 优先渲染 IPv6 / IP.SB 的多字段精细排版
+    if (ipGeoData.is_ipv6) {
+        var countryStr = ipGeoData.country_code ? (ipGeoData.country + ' (' + ipGeoData.country_code + ')') : (ipGeoData.country || '-');
+        var regionStr  = ipGeoData.region_code ? (ipGeoData.region + ' (' + ipGeoData.region_code + ')') : (ipGeoData.region || '-');
 
         container.innerHTML = 
             '<div style="text-align: center; line-height: 1.8; font-size: 14px; margin-top: 10px;">' +
-                '<div><strong>IP地址</strong>: ' + (data.ip || '-') + '</div>' +
-                '<div><strong>运营商</strong>: ' + (data.isp || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>组织</strong>: ' + (data.organization || '-') + '</div>' +
-                '<div><strong>自治系统 (ASN)</strong>: ' + (data.asn || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>ASN组织</strong>: ' + (data.asn_organization || '-') + '</div>' +
-                '<div><strong>大洲代码</strong>: ' + (data.continent_code || '-') + '</div>' +
+                '<div><strong>IP地址</strong>: ' + (ipGeoData.ip || '-') + '</div>' +
+                '<div><strong>运营商</strong>: ' + (ipGeoData.isp || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>组织</strong>: ' + (ipGeoData.organization || '-') + '</div>' +
+                '<div><strong>自治系统 (ASN)</strong>: ' + (ipGeoData.asn || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>ASN组织</strong>: ' + (ipGeoData.asn_organization || '-') + '</div>' +
+                '<div><strong>大洲代码</strong>: ' + (ipGeoData.continent_code || '-') + '</div>' +
                 '<div><strong>国家</strong>: ' + countryStr + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + regionStr + '</div>' +
-                '<div><strong>城市</strong>: ' + (data.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>邮编</strong>: ' + (data.postal_code || '-') + '</div>' +
-                '<div><strong>时区</strong>: ' + (data.timezone || '-') + '</div>' +
-                '<div><strong>经纬度</strong>: ' + (data.lat_lon || '-') + '</div>' +
+                '<div><strong>城市</strong>: ' + (ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>邮编</strong>: ' + (ipGeoData.postal_code || '-') + '</div>' +
+                '<div><strong>时区</strong>: ' + (ipGeoData.timezone || '-') + '</div>' +
+                '<div><strong>经纬度</strong>: ' + (ipGeoData.lat_lon || '-') + '</div>' +
             '</div>';
     } else {
-        // 普通结构或 IPv4 基础展示
+        // IPv4 本地离线库基础排版
         container.innerHTML = 
             '<div style="text-align: center; line-height: 1.8; font-size: 14px; margin-top: 10px;">' +
-                '<div><strong>IP地址</strong>: ' + (data.ip || '-') + '</div>' +
-                '<div><strong>国家</strong>: ' + (data.country || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + (data.region || '-') + '</div>' +
-                '<div><strong>城市</strong>: ' + (data.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>区县</strong>: ' + (data.area || '-') + '</div>' +
-                '<div><strong>运营商</strong>: ' + (data.isp || '-') + '</div>' +
+                '<div><strong>IP地址</strong>: ' + (ipGeoData.ip || '-') + '</div>' +
+                '<div><strong>国家</strong>: ' + (ipGeoData.country || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + (ipGeoData.region || '-') + '</div>' +
+                '<div><strong>城市</strong>: ' + (ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>区县</strong>: ' + (ipGeoData.area || '-') + '</div>' +
+                '<div><strong>运营商</strong>: ' + (ipGeoData.isp || '-') + '</div>' +
             '</div>';
     }
 }
@@ -75,14 +69,25 @@ function fetchIPInfo() {
             try {
                 var res = JSON.parse(getIpXhr.responseText);
                 if (res) {
-                    ipGeoData.ip = res.ip || '';
-                    ipGeoData.country = res.country || '';
-                    ipGeoData.region = res.region || '';
-                    ipGeoData.city = res.city || '';
-                    ipGeoData.area = res.area || '';
-                    ipGeoData.isp = res.isp || '';
+                    // 将后端返回的所有新字段全部存入 ipGeoData 全局变量
+                    ipGeoData.is_ipv6          = res.is_ipv6 || false;
+                    ipGeoData.ip               = res.ip || '';
+                    ipGeoData.isp              = res.isp || '';
+                    ipGeoData.organization     = res.organization || '';
+                    ipGeoData.asn              = res.asn || '';
+                    ipGeoData.asn_organization = res.asn_organization || '';
+                    ipGeoData.continent_code   = res.continent_code || '';
+                    ipGeoData.country          = res.country || '';
+                    ipGeoData.country_code     = res.country_code || '';
+                    ipGeoData.region           = res.region || '';
+                    ipGeoData.region_code      = res.region_code || '';
+                    ipGeoData.city             = res.city || '';
+                    ipGeoData.area             = res.area || '';
+                    ipGeoData.postal_code      = res.postal_code || '';
+                    ipGeoData.timezone         = res.timezone || '';
+                    ipGeoData.lat_lon          = res.lat_lon || '';
                     
-                    // 拿到数据后立即渲染更新页面
+                    // 拿到数据后立即无参渲染更新页面
                     renderIPInfo();
                 }
             } catch (e) {
