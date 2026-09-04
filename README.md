@@ -79,5 +79,3 @@ services:
       # PHP 时区设置
       - PHP_DATE_TIMEZONE=Asia/Shanghai
 ```
-
-![Screenshot_2026-09-04-16-12-23-461_org.mozilla.firefox](C:\Users\XD\Desktop\Screenshot_2026-09-04-16-12-23-461_org.mozilla.firefox.jpg)
