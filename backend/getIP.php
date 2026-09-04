@@ -6,13 +6,14 @@ Header("Content-Type: application/json; charset=utf-8");
 $ip = getIp();
 $rawIspInfo = getIspInfo($ip);
 
+// 精准对接标准版 qqwry.ipdb 的数组索引
 $response = [
     'ip'      => $ip,
-    'country' => $rawIspInfo[0] ?? '中国',
+    'country' => !empty($rawIspInfo[0]) ? $rawIspInfo[0] : '中国',
     'region'  => $rawIspInfo[1] ?? '',
     'city'    => $rawIspInfo[2] ?? '',
-    'area'    => $rawIspInfo[3] ?? '',
-    'isp'     => $rawIspInfo[4] ?? ($rawIspInfo[5] ?? '未知')
+    'area'    => $rawIspInfo[3] ?? '',  // district_name 区县
+    'isp'     => $rawIspInfo[5] ?? ($rawIspInfo[4] ?? '未知') // isp_domain 位于索引 5
 ];
 
 echo json_encode($response, JSON_UNESCAPED_UNICODE);
@@ -34,18 +35,15 @@ function getIp()
 
 function getIspInfo($ip)
 {
-    // 适配容器内 /backend/qqwry.ipdb 的实际存放路径
     $dbPath = __DIR__ . '/qqwry.ipdb';
     
     if (file_exists($dbPath) && file_exists(__DIR__ . '/Reader.php')) {
         require_once __DIR__ . '/Reader.php';
         try {
             $reader = new \ipip\db\Reader($dbPath);
-            // Reader.php 的 find 方法必须传入语言参数 'CN'
-            $addr = $reader->find($ip, 'CN');
-            return $addr;
+            // 必须传入语言参数 'CN' 以匹配索引列
+            return $reader->find($ip, 'CN');
         } catch (\Throwable $e) {
-            // 捕获所有异常，防止 PHP 直接抛出致命错误导致空白响应
             return null;
         }
     }
