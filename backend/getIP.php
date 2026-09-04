@@ -157,15 +157,14 @@ function getIspInfo($ip, $ipService)
 function getIsp($rawIspInfo, $ipService)
 {
     if ($ipService == 'ip.sb') {
-        ...
-    } elseif ($ipService == 'ipinfo.io') {
-        ...
-    } elseif ($ipService == 'local') {
-        // 直接返回我们上面组装好的包含省份和运营商的完整字符串
-        return is_array($rawIspInfo) ? ($rawIspInfo['isp'] ?? '未知') : 'Unknown';
-    }
-    return 'Unknown';
-}
+        if (
+            !is_array($rawIspInfo)
+            || !array_key_exists('organization', $rawIspInfo)
+            || !is_string($rawIspInfo['organization'])
+            || empty($rawIspInfo['organization'])
+        ) {
+            return 'Unknown';
+        }
         return $rawIspInfo['organization'];
     } elseif ($ipService == 'ipinfo.io') {
         if (
@@ -178,8 +177,7 @@ function getIsp($rawIspInfo, $ipService)
         }
         return preg_replace('/AS\\d+\\s/', '', $rawIspInfo['org']);
     } elseif ($ipService == 'local') {
-        // 使用本地数据库时直接返回运营商信息
-        return $rawIspInfo['isp'] ?? '未知';
+        return is_array($rawIspInfo) ? ($rawIspInfo['isp'] ?? '未知') : 'Unknown';
     }
     return 'Unknown';
 }
