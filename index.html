@@ -14,7 +14,7 @@ var url_report = './backend/report.php';
 var milestone = 0;
 var key_prefix = Date.parse(new Date());
 
-// 保存全局 IP 位置数据
+// 全局 IP 及位置信息对象
 var ipGeoData = {
     ip: '',
     country: '',
@@ -24,7 +24,22 @@ var ipGeoData = {
     isp: ''
 };
 
-// 主动发起一次 backend/getIP.php 请求读取本地 qqwry.ipdb
+function renderIPInfo() {
+    var ipElem = I("ip");
+    if (ipElem) {
+        ipElem.textContent = ipGeoData.ip || "无法获取";
+    }
+    var line2Elem = I("ipLine2");
+    if (line2Elem) {
+        line2Elem.innerHTML = 
+            "<strong>国家:</strong> " + (ipGeoData.country || '-') + 
+            " <strong>省份:</strong> " + (ipGeoData.region || '-') + 
+            " <strong>城市:</strong> " + (ipGeoData.city || '-') + 
+            " <strong>区域:</strong> " + (ipGeoData.area || '-') + 
+            " <strong>运营商:</strong> " + (ipGeoData.isp || '-');
+    }
+}
+
 function fetchIPInfo() {
     var getIpXhr = new XMLHttpRequest();
     getIpXhr.open('GET', './backend/getIP.php', true);
@@ -32,15 +47,16 @@ function fetchIPInfo() {
         if (getIpXhr.status === 200) {
             try {
                 var res = JSON.parse(getIpXhr.responseText);
-                if (res.processedString) {
-                    ipGeoData.ip = res.processedString.split(' - ')[0].trim();
-                }
-                if (res.rawIspInfo) {
-                    ipGeoData.country = res.rawIspInfo.country || '';
-                    ipGeoData.region = res.rawIspInfo.region || '';
-                    ipGeoData.city = res.rawIspInfo.city || '';
-                    ipGeoData.area = res.rawIspInfo.area || '';
-                    ipGeoData.isp = res.rawIspInfo.isp || '';
+                if (res) {
+                    ipGeoData.ip = res.ip || '';
+                    ipGeoData.country = res.country || '';
+                    ipGeoData.region = res.region || '';
+                    ipGeoData.city = res.city || '';
+                    ipGeoData.area = res.area || '';
+                    ipGeoData.isp = res.isp || '';
+                    
+                    // 拿到数据后立即渲染更新页面
+                    renderIPInfo();
                 }
             } catch (e) {
                 console.error("IP解析失败", e);
@@ -49,6 +65,8 @@ function fetchIPInfo() {
     };
     getIpXhr.send();
 }
+
+// 页面加载完成后立即发起 IP 获取
 fetchIPInfo();
 
 s.onupdate = function(data) {
@@ -60,25 +78,16 @@ s.onupdate = function(data) {
     var prog = (Number(data.dlProgress) * 2 + Number(data.ulProgress) * 2 + Number(data.pingProgress)) / 5;
     I("progress").style.width = (100 * prog) + "%";
 
-    // 优先使用接口拿到的纯 IP，拿不到则备用 speedtest 自己的 IP
-    var currentIp = ipGeoData.ip || (data.clientIp ? data.clientIp.split(' - ')[0] : '获取中...');
-
-    // 显示界面文本
-    I("ipLine1").innerHTML = "IP地址: <span id=\"ip\">" + currentIp + "</span>";
-    I("ipLine2").innerHTML = 
-        "<strong>国家:</strong> " + (ipGeoData.country || '-') + 
-        " <strong>省份:</strong> " + (ipGeoData.region || '-') + 
-        " <strong>城市:</strong> " + (ipGeoData.city || '-') + 
-        " <strong>区域:</strong> " + (ipGeoData.area || '-') + 
-        " <strong>运营商:</strong> " + (ipGeoData.isp || '-');
+    // 每次 update 刷新渲染文本
+    renderIPInfo();
 
     var progress = Math.floor(100 * prog);
-    var key = key_prefix + "_" + currentIp;
+    var key = key_prefix + "_" + (ipGeoData.ip || '127.0.0.1');
 
     if (progress > 20 && (progress % 10 == 0) && progress != milestone) {
         var addr = [ipGeoData.country, ipGeoData.region, ipGeoData.city, ipGeoData.area].filter(Boolean).join(' ');
         var params = 'key=' + key + 
-                     '&ip=' + encodeURIComponent(currentIp) + 
+                     '&ip=' + encodeURIComponent(ipGeoData.ip) + 
                      '&isp=' + encodeURIComponent(ipGeoData.isp) + 
                      '&addr=' + encodeURIComponent(addr) + 
                      '&dspeed=' + I("dlText").textContent + 

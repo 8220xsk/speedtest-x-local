@@ -6,7 +6,16 @@ Header("Content-Type: application/json; charset=utf-8");
 $ip = getIp();
 $rawIspInfo = getIspInfo($ip);
 
-sendResponse($ip, $rawIspInfo);
+$response = [
+    'ip'      => $ip,
+    'country' => $rawIspInfo['country'] ?? '中国',
+    'region'  => $rawIspInfo['region'] ?? '',
+    'city'    => $rawIspInfo['city'] ?? '',
+    'area'    => $rawIspInfo['area'] ?? '',
+    'isp'     => $rawIspInfo['isp'] ?? '未知'
+];
+
+echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
 function getIp()
 {
@@ -30,17 +39,15 @@ function getIspInfo($ip)
         require_once './Reader.php';
         try {
             $reader = new \ipip\db\Reader($dbPath);
-            // metowolf 打包的 qqwry.ipdb 直接使用 find($ip) 访问数组元素
             $addr = $reader->find($ip);
 
             if (is_array($addr)) {
                 return [
-                    'country'      => $addr[0] ?? '中国',
-                    'region'       => $addr[1] ?? '',
-                    'city'         => $addr[2] ?? '',
-                    'area'         => $addr[3] ?? '',
-                    'organization' => $addr[4] ?? '',
-                    'isp'          => !empty($addr[5]) ? $addr[5] : ($addr[4] ?? '未知')
+                    'country' => $addr[0] ?? '中国',
+                    'region'  => $addr[1] ?? '',
+                    'city'    => $addr[2] ?? '',
+                    'area'    => $addr[3] ?? '',
+                    'isp'     => !empty($addr[5]) ? $addr[5] : ($addr[4] ?? '未知')
                 ];
             }
         } catch (Exception $e) {
