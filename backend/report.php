@@ -60,10 +60,15 @@ if (!empty($reportData['addr'])) {
 
 if (empty($reportData['ip'])) exit;
 
-// 忽略任何配置判断，强制每次测速都新增记录
+// 强制插入新记录
 $results = $store->insert($reportData);
 
-// 如果超过最大日志限制，删掉最旧的一条
-if (defined('MAX_LOG_COUNT') && $results['_id'] > MAX_LOG_COUNT) {
-    $store->where('_id', '=', $results['_id'] - MAX_LOG_COUNT)->delete();
+// 确保读取到的最大数量是整数，防止被误判为 1
+$maxCount = defined('MAX_LOG_COUNT') ? (int)MAX_LOG_COUNT : 100;
+
+// 只有当总记录数超过 maxCount 时才清理旧记录
+if ($results['_id'] > $maxCount) {
+    $store->where('_id', '=', $results['_id'] - $maxCount)->delete();
 }
+
+echo "1";
