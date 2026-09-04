@@ -1,104 +1,43 @@
 <?php
 
-/*
- * This script detects the client's IP address and fetches ISP info from ipinfo.io/
- * Output from this script is a JSON string composed of 2 objects: a string called processedString which contains the combined IP, ISP, Contry and distance as it can be presented to the user; and an object called rawIspInfo which contains the raw data from ipinfo.io (will be empty if isp detection is disabled).
- * Client side, the output of this script can be treated as JSON or as regular text. If the output is regular text, it will be shown to the user as is.
- */
-require_once "./config.php";
-
 error_reporting(0);
 
-define('API_KEY_FILE', 'getIP_ipInfo_apikey.php');
-define('SERVER_LOCATION_CACHE_FILE', 'getIP_serverLocation.php');
+Header("Content-Type: application/json; charset=utf-8");
 
-/**
- * @return string
- */
-function getClientIp()
+$ip = getIp();
+$ipService = getIpService();
+$rawIspInfo = getIspInfo($ip, $ipService);
+$isp = getIsp($rawIspInfo, $ipService);
+
+sendResponse($ip, $isp, $rawIspInfo);
+
+function getIp()
 {
-    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        $ip = $_SERVER['HTTP_CLIENT_IP'];
-    } elseif (!empty($_SERVER['HTTP_X_REAL_IP'])) {
-        $ip = $_SERVER['HTTP_X_REAL_IP'];
-    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
         $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-        $ip = preg_replace('/,.*/', '', $ip); # hosts are comma-separated, client is first
+    } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
     } else {
         $ip = $_SERVER['REMOTE_ADDR'];
     }
-
-    return preg_replace('/^::ffff:/', '', $ip);
+    if (strpos($ip, ',') !== false) {
+        $ip = explode(',', $ip)[0];
+    }
+    return trim($ip);
 }
 
-/**
- * @param string $ip
- *
- * @return string|null
- */
-function getLocalOrPrivateIpInfo($ip)
+function getIpService()
 {
-    // ::1/128 is the only localhost ipv6 address. there are no others, no need to strpos this
-    if ('::1' === $ip) {
-        return 'localhost IPv6 access';
+    $ipService = 'ip.sb';
+    if (file_exists('../config.php')) {
+        include '../config.php';
+        if (isset($MAX_LOG_COUNT) && defined('IP_SERVICE')) {
+            $ipService = IP_SERVICE;
+        }
     }
-
-    // simplified IPv6 link-local address (should match fe80::/10)
-    if (stripos($ip, 'fe80:') === 0) {
-        return 'link-local IPv6 access';
-    }
-
-    // anything within the 127/8 range is localhost ipv4, the ip must start with 127.0
-    if (strpos($ip, '127.') === 0) {
-        return 'localhost IPv4 access';
-    }
-
-    // 10/8 private IPv4
-    if (strpos($ip, '10.') === 0) {
-        return 'private IPv4 access';
-    }
-
-    // 172.16/12 private IPv4
-    if (preg_match('/^172\.(1[6-9]|2\d|3[01])\./', $ip) === 1) {
-        return 'private IPv4 access';
-    }
-
-    // 192.168/16 private IPv4
-    if (strpos($ip, '192.168.') === 0) {
-        return 'private IPv4 access';
-    }
-
-    // IPv4 link-local
-    if (strpos($ip, '169.254.') === 0) {
-        return 'link-local IPv4 access';
-    }
-
-    return null;
+    return $ipService;
 }
 
-/**
- * @return string
- */
-function getIpInfoTokenString()
-{
-    if (!file_exists(API_KEY_FILE)) {
-        return '';
-    }
-
-    require API_KEY_FILE;
-
-    if (empty($IPINFO_APIKEY)) {
-        return '';
-    }
-
-    return '?token='.$IPINFO_APIKEY;
-}
-
-/**
- * @param string $ip
- *
- * @return array|null
- */
 function getIspInfo($ip, $ipService)
 {
     if ($ipService === 'local') {
@@ -107,7 +46,7 @@ function getIspInfo($ip, $ipService)
             require_once './Reader.php';
             try {
                 $reader = new \ipip\db\Reader($dbPath);
-                $addr = $reader->find($ip, 'CN'); // 获取中文信息
+                $addr = $reader->find($ip, 'CN');
 
                 return [
                     'country'      => $addr[0] ?? '中国',
@@ -115,7 +54,7 @@ function getIspInfo($ip, $ipService)
                     'city'         => $addr[2] ?? '',
                     'area'         => '',
                     'organization' => $addr[3] ?? '未知',
-                    'isp'          => $addr[3] ?? ($addr[2] ?? '未知') // 仅传真正的运营商/组织名
+                    'isp'          => $addr[3] ?? ($addr[2] ?? '未知')
                 ];
             } catch (Exception $e) {
                 return null;
@@ -123,30 +62,27 @@ function getIspInfo($ip, $ipService)
         }
     }
 
-    // --- 原有的抓取逻辑（作为备选） ---
-    $json = '';
+    $url = '';
     if ($ipService == 'ip.sb') {
-        $json = file_get_contents('https://api.ip.sb/geoip/' . $ip);
+        $url = 'https://api.ip.sb/geoip/' . $ip;
     } elseif ($ipService == 'ipinfo.io') {
-        $json = file_get_contents('https://ipinfo.io/'.$ip.'/json'.getIpInfoTokenString());
-    }
-    if (!is_string($json)) {
+        $url = 'https://ipinfo.io/' . $ip . '/json';
+    } else {
         return null;
     }
 
-    $data = json_decode($json, true);
-    if (!is_array($data)) {
-        return null;
-    }
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    $response = curl_exec($ch);
+    curl_close($ch);
 
-    return $data;
+    return json_decode($response, true);
 }
 
-/**
- * @param array|null $rawIspInfo
- *
- * @return string
- */
 function getIsp($rawIspInfo, $ipService)
 {
     if ($ipService == 'ip.sb') {
@@ -175,202 +111,27 @@ function getIsp($rawIspInfo, $ipService)
     return 'Unknown';
 }
 
-
-/**
- * @return string|null
- */
-function getServerLocation()
+function sendResponse($ip, $ipInfo = null, $rawIspInfo = null)
 {
-    $serverLoc = null;
-    if (file_exists(SERVER_LOCATION_CACHE_FILE)) {
-        require SERVER_LOCATION_CACHE_FILE;
-    }
-    if (is_string($serverLoc) && !empty($serverLoc)) {
-        return $serverLoc;
-    }
-
-    $json = file_get_contents('https://ipinfo.io/json'.getIpInfoTokenString());
-    if (!is_string($json)) {
-        return null;
-    }
-
-    $details = json_decode($json, true);
-    if (
-        !is_array($details)
-        || !array_key_exists('loc', $details)
-        || !is_string($details['loc'])
-        || empty($details['loc'])
-    ) {
-        return null;
-    }
-
-    $serverLoc = $details['loc'];
-    $cacheData = "<?php\n\n\$serverLoc = '".addslashes($serverLoc)."';\n";
-    file_put_contents(SERVER_LOCATION_CACHE_FILE, $cacheData);
-
-    return $serverLoc;
-}
-
-/**
- * Optimized algorithm from http://www.codexworld.com
- *
- * @param float $latitudeFrom
- * @param float $longitudeFrom
- * @param float $latitudeTo
- * @param float $longitudeTo
- *
- * @return float [km]
- */
-function distance(
-    $latitudeFrom,
-    $longitudeFrom,
-    $latitudeTo,
-    $longitudeTo
-) {
-    $rad = M_PI / 180;
-    $theta = $longitudeFrom - $longitudeTo;
-    $dist = sin($latitudeFrom * $rad)
-        * sin($latitudeTo * $rad)
-        + cos($latitudeFrom * $rad)
-        * cos($latitudeTo * $rad)
-        * cos($theta * $rad);
-
-    return acos($dist) / $rad * 60 * 1.853;
-}
-
-/**
- * @param array|null $rawIspInfo
- *
- * @return string|null
- */
-function getDistance($rawIspInfo)
-{
-    if (
-        !is_array($rawIspInfo)
-        || !array_key_exists('loc', $rawIspInfo)
-        || !isset($_GET['distance'])
-        || !in_array($_GET['distance'], ['mi', 'km'], true)
-    ) {
-        return null;
-    }
-
-    $unit = $_GET['distance'];
-    $clientLocation = $rawIspInfo['loc'];
-    $serverLocation = getServerLocation();
-
-    if (!is_string($serverLocation)) {
-        return null;
-    }
-
-    return calculateDistance(
-        $serverLocation,
-        $clientLocation,
-        $unit
-    );
-}
-
-/**
- * @param string $clientLocation
- * @param string $serverLocation
- * @param string $unit
- *
- * @return string
- */
-function calculateDistance($clientLocation, $serverLocation, $unit)
-{
-    list($clientLatitude, $clientLongitude) = explode(',', $clientLocation);
-    list($serverLatitude, $serverLongitude) = explode(',', $serverLocation);
-    $dist = distance(
-        $clientLatitude,
-        $clientLongitude,
-        $serverLatitude,
-        $serverLongitude
-    );
-
-    if ('mi' === $unit) {
-        $dist /= 1.609344;
-        $dist = round($dist, -1);
-        if ($dist < 15) {
-            $dist = '<15';
-        }
-
-        return $dist.' mi';
-    }
-
-    if ('km' === $unit) {
-        $dist = round($dist, -1);
-        if ($dist < 20) {
-            $dist = '<20';
-        }
-
-        return $dist.' km';
-    }
-
-    return null;
-}
-
-/**
- * @return void
- */
-function sendHeaders()
-{
-    header('Content-Type: application/json; charset=utf-8');
-
-    if (isset($_GET['cors'])) {
-        header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: GET, POST');
-    }
-
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
-    header('Cache-Control: post-check=0, pre-check=0', false);
-    header('Pragma: no-cache');
-}
-
-/**
- * 修改后的返回逻辑，返回完整的地理位置信息
- */
-function sendResponse(
-    $ip,
-    $ipInfo = null,
-    $rawIspInfo = null
-) {
     $processedString = $ip;
+    if (is_array($rawIspInfo)) {
+        $country = $rawIspInfo['country'] ?? '';
+        $region = $rawIspInfo['region'] ?? '';
+        $city = $rawIspInfo['city'] ?? '';
+        $isp = $rawIspInfo['isp'] ?? ($rawIspInfo['organization'] ?? '');
 
-    // 如果是本地IP，显示特殊信息
-    if (is_string($ipInfo) && ($ipInfo === 'localhost IPv4 access' ||
-        $ipInfo === 'localhost IPv6 access' ||
-        $ipInfo === 'private IPv4 access' ||
-        $ipInfo === 'link-local IPv4 access' ||
-        $ipInfo === 'link-local IPv6 access')) {
+        $locationParts = array_filter([$country, $region, $city, $isp]);
+        if (!empty($locationParts)) {
+            $processedString .= ' - ' . implode(' ', $locationParts);
+        }
+    } elseif (is_string($ipInfo) && $ipInfo !== 'Unknown') {
         $processedString .= ' - ' . $ipInfo;
     }
-    // 如果运营商信息不是 Unknown，才进行拼接
-    elseif (is_string($ipInfo) && $ipInfo !== 'Unknown') {
-        $processedString .= ' - ' . $ipInfo;
-    }
 
-    sendHeaders();
-    echo json_encode([
+    $response = [
         'processedString' => $processedString,
-        'rawIspInfo' => $rawIspInfo ?: '',
-    ]);
+        'rawIspInfo' => $rawIspInfo
+    ];
+
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
 }
-
-$ip = getClientIp();
-$localIpInfo = getLocalOrPrivateIpInfo($ip);
-// local ip, no need to fetch further information
-if (is_string($localIpInfo)) {
-    sendResponse($ip, $localIpInfo);
-    exit;
-}
-
-if (!isset($_GET['isp'])) {
-    sendResponse($ip);
-    exit;
-}
-
-$rawIspInfo = getIspInfo($ip, IP_SERVICE);
-$isp = getIsp($rawIspInfo, IP_SERVICE);
-//$distance = getDistance($rawIspInfo);
-
-sendResponse($ip, $isp, $rawIspInfo);
