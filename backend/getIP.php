@@ -46,16 +46,19 @@ function getIspInfo($ip, $ipService)
             require_once './Reader.php';
             try {
                 $reader = new \ipip\db\Reader($dbPath);
-                $addr = $reader->find($ip, 'CN');
+                // 最新指引：直接 find($ip)，不能加 'CN' 参数
+                $addr = $reader->find($ip);
 
-                return [
-                    'country'      => $addr[0] ?? '中国',
-                    'region'       => $addr[1] ?? '',
-                    'city'         => $addr[2] ?? '',
-                    'area'         => '',
-                    'organization' => $addr[3] ?? '未知',
-                    'isp'          => $addr[3] ?? ($addr[2] ?? '未知')
-                ];
+                if (is_array($addr)) {
+                    return [
+                        'country'      => $addr[0] ?? '中国', // country_name
+                        'region'       => $addr[1] ?? '',     // region_name (省)
+                        'city'         => $addr[2] ?? '',     // city_name (市)
+                        'area'         => $addr[3] ?? '',     // district_name (区)
+                        'organization' => $addr[4] ?? '',     // owner_domain
+                        'isp'          => !empty($addr[5]) ? $addr[5] : ($addr[4] ?? '未知') // isp_domain (运营商)
+                    ];
+                }
             } catch (Exception $e) {
                 return null;
             }
@@ -118,7 +121,7 @@ function sendResponse($ip, $ipInfo = null, $rawIspInfo = null)
         $country = $rawIspInfo['country'] ?? '';
         $region = $rawIspInfo['region'] ?? '';
         $city = $rawIspInfo['city'] ?? '';
-        $isp = $rawIspInfo['isp'] ?? ($rawIspInfo['organization'] ?? '');
+        $isp = $rawIspInfo['isp'] ?? '';
 
         $locationParts = array_filter([$country, $region, $city, $isp]);
         if (!empty($locationParts)) {
