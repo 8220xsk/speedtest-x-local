@@ -39,8 +39,8 @@ function renderIPInfo() {
             '<div style="text-align: center; line-height: 1.8; font-size: 14px; margin-top: 10px;">' +
                 '<div><strong>IP地址</strong>: ' + (ipGeoData.ip || '-') + '</div>' +
                 '<div><strong>运营商</strong>: ' + (ipGeoData.isp || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>组织</strong>: ' + (ipGeoData.organization || '-') + '</div>' +
-                '<div><strong>自治系统 (ASN)</strong>: ' + (ipGeoData.asn || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>ASN组织</strong>: ' + (ipGeoData.asn_organization || '-') + '</div>' +
-                '<div><strong>大洲代码</strong>: ' + (ipGeoData.continent_code || '-') + '</div>' +
+                '<div><strong>自治系统 (ASN)</strong>: ' + (ipGeoData.asn || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <div><strong>大洲代码</strong>: ' + (ipGeoData.continent_code || '-') + '</div>' +
+                '<strong>ASN组织</strong>: ' + (ipGeoData.asn_organization || '-') + '</div>' +
                 '<div><strong>国家</strong>: ' + countryStr + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>省份</strong>: ' + regionStr + '</div>' +
                 '<div><strong>城市</strong>: ' + (ipGeoData.city || '-') + ' &nbsp;&nbsp;&nbsp;&nbsp; <strong>邮编</strong>: ' + (ipGeoData.postal_code || '-') + '</div>' +
                 '<div><strong>时区</strong>: ' + (ipGeoData.timezone || '-') + '</div>' +
