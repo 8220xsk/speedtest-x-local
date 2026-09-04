@@ -19,11 +19,6 @@ function maskLastSegment($ip) {
     return rtrim(inet_ntop($ipaddr), "0") . "*";
 }
 
-$store = \SleekDB\SleekDB::store('speedlogs', './', [
-    'auto_cache' => false,
-    'timeout'    => 120
-]);
-
 $rawIp = !empty($_POST['ip']) ? filter_var($_POST['ip'], FILTER_DEFAULT) : $_SERVER['REMOTE_ADDR'];
 
 $reportData = [
@@ -36,7 +31,6 @@ $reportData = [
     "ping"    => isset($_POST['ping']) ? (double)$_POST['ping'] : 0,
     "jitter"  => isset($_POST['jitter']) ? (double)$_POST['jitter'] : 0,
     "created" => date('Y-m-d H:i:s', time()),
-    "timestamp" => time() // 增加时间戳用于判定测速是否已超时结束
 ];
 
 if (!empty($reportData['addr'])) {
@@ -56,42 +50,14 @@ if (!empty($reportData['addr'])) {
     }
 }
 
-$isMultiLog = defined('SAME_IP_MULTI_LOGS') && (SAME_IP_MULTI_LOGS === true || SAME_IP_MULTI_LOGS === 'true' || SAME_IP_MULTI_LOGS === 1);
-$maxCount   = defined('MAX_LOG_COUNT') ? (int)MAX_LOG_COUNT : 100;
+// 收到请求时（代表测试完全结束），直接新建一条测速日志
+$store = \SleekDB\SleekDB::store('speedlogs', './', ['auto_cache' => false, 'timeout' => 120]);
+$results = $store->insert($reportData);
 
-if ($isMultiLog) {
-    // 寻找相同 key 的最后一条记录
-    $oldLog = $store->where('key', '=', $reportData['key'])->orderBy('desc', '_id')->fetch();
-    
-    // 如果找到了记录，检查它是不是 30 秒内创建/更新的
-    $isSameSession = false;
-    if (!empty($oldLog) && isset($oldLog[0]['timestamp'])) {
-        if (time() - $oldLog[0]['timestamp'] < 30) { 
-            $isSameSession = true; // 30秒内，认定为同一人在测速途中更新数据
-        }
-    }
-
-    if ($isSameSession) {
-        // 同一次测速过程：更新现有的记录
-        $id = $oldLog[0]['_id'];
-        $store->where('_id', '=', $id)->update($reportData);
-    } else {
-        // 第一次测速，或者上一条记录已超时（开启了新一轮测速）：插入新文件 (2.json, 3.json...)
-        $results = $store->insert($reportData);
-        if ($results['_id'] > $maxCount) {
-            $store->where('_id', '=', $results['_id'] - $maxCount)->delete();
-        }
-    }
-} else {
-    // 未开启多记录模式：按 IP 查旧记录更新
-    $oldLog = $store->where('ip', '=', $reportData['ip'])->orderBy('desc', '_id')->fetch();
-    if (is_array($oldLog) && empty($oldLog)) {
-        $results = $store->insert($reportData);
-    } else {
-        $id = $oldLog[0]['_id'];
-        unset($reportData['ip']);
-        $store->where('_id', '=', $id)->update($reportData);
-    }
+// 限制保存最大条数，超出部分删除最旧的一条
+$maxCount = defined('MAX_LOG_COUNT') ? (int)MAX_LOG_COUNT : 100;
+if ($results['_id'] > $maxCount) {
+    $store->where('_id', '=', $results['_id'] - $maxCount)->delete();
 }
 
 echo "1";

@@ -250,7 +250,7 @@ this.addEventListener("message", function(e) {
 		clearRequests(); // stop all xhr activity
 		runNextTest = null;
 		if (interval) clearInterval(interval); // clear timer if present
-		if (settings.telemetry_level > 1) sendTelemetry(function() {});
+//   	if (settings.telemetry_level > 1) sendTelemetry(function() {});
 		testState = 5; //set test as aborted
 		dlStatus = "";
 		ulStatus = "";
