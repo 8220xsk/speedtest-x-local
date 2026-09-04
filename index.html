@@ -49,37 +49,61 @@ function fetchIPInfo() {
 fetchIPInfo();
 
 s.onupdate = function(data) {
-    var rawIp = data.clientIp || "获取失败";
+    I("ip").textContent = data.clientIp || "获取失败";
     I("dlText").textContent = (data.testState == 1 && data.dlStatus == 0) ? "..." : data.dlStatus;
     I("ulText").textContent = (data.testState == 3 && data.ulStatus == 0) ? "..." : data.ulStatus;
     I("pingText").textContent = data.pingStatus;
     I("jitText").textContent = data.jitterStatus;
     
-    var prog = (Number(data.dlProgress)*2 + Number(data.ulProgress)*2 + Number(data.pingProgress)) / 5;
+    var prog = (Number(data.dlProgress) * 2 + Number(data.ulProgress) * 2 + Number(data.pingProgress)) / 5;
     I("progress").style.width = (100 * prog) + "%";
 
-    // 提取纯 IP 地址
-    var currentIp = rawIp.split(' - ')[0].trim();
-    ipGeoData.ip = currentIp;
+    var rawIpInfo = I("ip").textContent;
+    var ip = '';
+    var isp = '';
+    var country = '';
+    var region = '';
+    var city = '';
+    var area = '';
 
-    // 更新前端界面显示
-    I("ipLine1").innerHTML = "IP地址: " + currentIp;
-    I("ipLine2").innerHTML = 
-        "<strong>国家:</strong> " + (ipGeoData.country || '-') + 
-        " <strong>省份:</strong> " + (ipGeoData.region || '-') + 
-        " <strong>城市:</strong> " + (ipGeoData.city || '-') + 
-        " <strong>区域:</strong> " + (ipGeoData.area || '-') + 
-        " <strong>运营商:</strong> " + (ipGeoData.isp || '未知');
+    if (rawIpInfo.includes(' - ')) {
+        var parts = rawIpInfo.split(' - ');
+        ip = parts[0].trim();
+        var geoString = parts[1].trim();
+
+        // 拆分类似 China Guangdong Shenzhen China Mobile 的位置字符串
+        var geoParts = geoString.split(' ');
+        if (geoParts.length >= 4) {
+            country = geoParts[0];
+            region  = geoParts[1];
+            city    = geoParts[2];
+            isp     = geoParts.slice(3).join(' ');
+        } else if (geoParts.length === 3) {
+            country = geoParts[0];
+            region  = geoParts[1];
+            isp     = geoParts[2];
+        } else {
+            isp = geoString;
+        }
+    } else {
+        ip = rawIpInfo;
+    }
+
+    I("ipLine1").innerHTML = "IP地址: <span id=\"ip\">" + ip + "</span>";
+    I("ipLine2").innerHTML = "<strong>国家:</strong> " + (country || '-') + 
+                             " <strong>省份:</strong> " + (region || '-') + 
+                             " <strong>城市:</strong> " + (city || '-') + 
+                             " <strong>区域:</strong> " + (area || '-') + 
+                             " <strong>运营商:</strong> " + (isp || '-');
 
     var progress = Math.floor(100 * prog);
-    var key = key_prefix + "_" + currentIp;
+    var key = key_prefix + "_" + ip;
 
-    // 定期上报测速数据到 backend/report.php
     if (progress > 20 && (progress % 10 == 0) && progress != milestone) {
-        var addr = [ipGeoData.country, ipGeoData.region, ipGeoData.city, ipGeoData.area].filter(Boolean).join(' ');
+        var addr = [country, region, city, area].filter(Boolean).join(' ');
         var params = 'key=' + key + 
-                     '&ip=' + encodeURIComponent(currentIp) + 
-                     '&isp=' + encodeURIComponent(ipGeoData.isp) + 
+                     '&ip=' + encodeURIComponent(ip) + 
+                     '&isp=' + encodeURIComponent(isp) + 
                      '&addr=' + encodeURIComponent(addr) + 
                      '&dspeed=' + I("dlText").textContent + 
                      '&uspeed=' + I("ulText").textContent + 
