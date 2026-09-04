@@ -61,24 +61,18 @@ if (!empty($reportData['addr'])) {
 if (empty($reportData['ip'])) exit;
 
 if (SAME_IP_MULTI_LOGS) {
-    $oldLog = $store->where('key', '=', $reportData['key'])->fetch();
+    // 开启多记录时：直接 insert 新增，生成 2.json, 3.json...
+    $results = $store->insert($reportData);
+    if ($results['_id'] > MAX_LOG_COUNT) {
+        $store->where('_id', '=', $results['_id'] - MAX_LOG_COUNT)->delete();
+    }
 } else {
-    $oldLog = $store->where('ip', '=', $reportData['ip'])->orderBy( 'desc', '_id' )->fetch();
-}
-
-if (is_array($oldLog) && empty($oldLog)) {
-     $results = $store->insert($reportData);
-     if ($results['_id'] > MAX_LOG_COUNT) {
-         $store->where('_id', '=', $results['_id'] - MAX_LOG_COUNT)->delete();
-     }
-} else {
-    $id = $oldLog[0]['_id'];
-    if (SAME_IP_MULTI_LOGS) {
-        $key = $reportData['key'];
-        unset($reportData['key']);
-        $store->where('_id', '=', $id)->update($reportData);
+    // 不开启多记录时：按 IP 覆盖旧记录
+    $oldLog = $store->where('ip', '=', $reportData['ip'])->orderBy('desc', '_id')->fetch();
+    if (is_array($oldLog) && empty($oldLog)) {
+        $results = $store->insert($reportData);
     } else {
-        $ip = $reportData['ip'];
+        $id = $oldLog[0]['_id'];
         unset($reportData['ip']);
         $store->where('_id', '=', $id)->update($reportData);
     }
