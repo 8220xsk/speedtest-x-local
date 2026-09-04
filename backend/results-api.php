@@ -6,7 +6,7 @@ Header("Content-Type: application/json; charset=utf-8");
 require_once "./SleekDB/SleekDB.php";
 require_once "./config.php";
 
-$store = \SleekDB\SleekDB::store('speedlogs', './', [
+$store = \SleekDB\SleekDB::store('speedlogs', __DIR__ . '/', [
     'auto_cache' => false,
     'timeout' => 120
 ]);
@@ -29,8 +29,10 @@ foreach ($logs as &$log) {
     // 处理 IPv6 打码 - 只保留前三段
     if (!empty($log['ip']) && filter_var($log['ip'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
         $segments = explode(':', $log['ip']);
-        if (count($segments) >= 3) {
-            $log['ip'] = $segments[0] . ':' . $segments[1] . ':' . $segments[2] . ':*';
+        if (count($segments) >= 4) {
+            // 保留前三段，后面全部替换为 *
+            $maskedSegments = array_slice($segments, 0, 3);
+            $log['ip'] = implode(':', $maskedSegments) . ':*';
         }
     }
 

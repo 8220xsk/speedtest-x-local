@@ -3,6 +3,10 @@
 require_once "./SleekDB/SleekDB.php";
 require_once "./config.php";
 
+// 启用错误报告
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+
 function maskLastSegment($ip) {
     if (empty($ip)) return "Unknown";
     $ipaddr = @inet_pton($ip);
@@ -51,14 +55,20 @@ if (!empty($reportData['addr'])) {
     }
 }
 
-// 收到请求时（代表测试完全结束），直接新建一条测速日志
-$store = \SleekDB\SleekDB::store('speedlogs', './', ['auto_cache' => false, 'timeout' => 120]);
-$results = $store->insert($reportData);
+try {
+    // 收到请求时（代表测试完全结束），直接新建一条测速日志
+    $store = \SleekDB\SleekDB::store('speedlogs', __DIR__ . '/', ['auto_cache' => false, 'timeout' => 120]);
+    $results = $store->insert($reportData);
 
-// 限制保存最大条数，超出部分删除最旧的一条
-$maxCount = defined('MAX_LOG_COUNT') ? (int)MAX_LOG_COUNT : 100;
-if ($results['_id'] > $maxCount) {
-    $store->where('_id', '=', $results['_id'] - $maxCount)->delete();
+    // 限制保存最大条数，超出部分删除最旧的一条
+    $maxCount = defined('MAX_LOG_COUNT') ? (int)MAX_LOG_COUNT : 100;
+    if ($results['_id'] > $maxCount) {
+        $store->where('_id', '=', $results['_id'] - $maxCount)->delete();
+    }
+
+    echo "1";
+} catch (Exception $e) {
+    // 记录错误到文件以便调试
+    file_put_contents(__DIR__ . '/error.log', date('Y-m-d H:i:s') . ' - ' . $e->getMessage() . "\n", FILE_APPEND);
+    echo "0";
 }
-
-echo "1";
